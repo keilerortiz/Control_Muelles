@@ -1,0 +1,45 @@
+version: '3.9'
+
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    environment:
+      ACCEPT_EULA: Y
+      SA_PASSWORD: ${DB_PASSWORD}
+      MSSQL_PID: Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - db-data:/var/opt/mssql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "bash", "-lc", "echo 'SELECT 1' | /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P ${DB_PASSWORD}"]
+      interval: 10s
+      retries: 10
+
+  backend:
+    build: ./backend
+    environment:
+      APP_ENV: production
+      DB_HOST: db
+      DB_PORT: 1433
+      DB_NAME: ${DB_NAME}
+      DB_USER: sa
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      TRUSTED_HOSTS: localhost,127.0.0.1,frontend
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  db-data:

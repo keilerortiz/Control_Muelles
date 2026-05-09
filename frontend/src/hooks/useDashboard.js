@@ -1,0 +1,11 @@
+import { useQuery } from "@tanstack/react-query";
+
+import { dashboardService } from "../services/dashboardService";
+
+export function useDashboard() {
+  return useQuery({
+    queryKey: ["dashboard-summary"],
+    queryFn: dashboardService.summary,
+    refetchInterval: 10_000,
+  });
+}

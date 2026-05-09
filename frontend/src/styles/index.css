@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-primary: #f8fafc;
+  --bg-surface: #ffffff;
+  --text-primary: #0f172a;
+  --text-muted: #475569;
+}
+
+body {
+  @apply bg-neutral-50 text-neutral-900 antialiased;
+}
