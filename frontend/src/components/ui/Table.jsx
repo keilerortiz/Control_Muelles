@@ -2,7 +2,7 @@
 import { forwardRef } from "react";
 
 export const Table = forwardRef(
-  ({ columns, rows, renderCell, className = "", ...props }, ref) => {
+  ({ columns, rows, renderCell, className = "", onRowClick, getRowClassName, ...props }, ref) => {
     return (
       <div
         className={`overflow-x-auto rounded-lg border border-neutral-200 bg-white shadow-sm ${className}`}
@@ -36,12 +36,15 @@ export const Table = forwardRef(
             ) : (
               rows.map((row, rowIndex) => (
                 <tr
-                  key={row.id || rowIndex}
-                  className="border-b border-neutral-100 transition-colors hover:bg-neutral-50/80"
+                  key={row.Id || row.id || rowIndex}
+                  className={`border-b border-neutral-100 transition-colors ${
+                    onRowClick ? "cursor-pointer hover:bg-neutral-50/80" : "hover:bg-neutral-50/80"
+                  } ${getRowClassName ? getRowClassName(row, rowIndex) : ""}`}
+                  onClick={onRowClick ? () => onRowClick(row, rowIndex) : undefined}
                 >
                   {columns.map((column, colIndex) => (
                     <td
-                      key={`${row.id || rowIndex}-${column.key}`}
+                      key={`${row.Id || row.id || rowIndex}-${column.key}`}
                       className="px-4 py-2.5 text-sm text-neutral-700 first:pl-4 last:pr-4"
                     >
                       {renderCell

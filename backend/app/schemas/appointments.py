@@ -29,12 +29,13 @@ class AssignResourcesPayload(BaseModel):
     dockId: int
     seniorIds: list[int]
     juniorIds: list[int] = []
-    candidatesVersion: int | None = None
+    candidatesVersion: int
 
     model_config = ConfigDict(extra="forbid")
 
 
 class StartProcessPayload(BaseModel):
+    documentDeliveryAt: datetime
     processStartAt: datetime
 
     model_config = ConfigDict(extra="forbid")

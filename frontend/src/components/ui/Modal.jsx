@@ -101,3 +101,7 @@ export function Modal({
     document.body
   );
 }
+
+export function ModalFooter({ children, className = "" }) {
+  return <div className={`mt-6 flex items-center justify-end ${className}`}>{children}</div>;
+}

@@ -15,7 +15,7 @@ def error_response(
     *,
     message: str,
     error_code: str,
-    request_id: str,
+    correlation_id: str,
     status_code: int,
     data: object = None,
 ) -> JSONResponse:
@@ -25,9 +25,12 @@ def error_response(
             {
                 "success": False,
                 "message": message,
-                "errorCode": error_code,
-                "requestId": request_id,
-                "data": data if data is not None else {},
+                "data": None,
+                "error": {
+                    "code": error_code,
+                    "details": data if data is not None else {},
+                },
+                "correlationId": correlation_id,
             },
         ),
     )

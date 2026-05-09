@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 
 from app.api.v1.appointments.dependencies import get_appointment_service
 from app.core.constants import Role
@@ -74,118 +74,140 @@ async def candidates(
 
 @router.post("", status_code=201)
 async def create_appointment(
+    request: Request,
     payload: AppointmentCreate,
     service: AppointmentService = Depends(get_appointment_service),
     current_user=Depends(require_roles(Role.PLANEADOR, Role.ADMIN)),
 ):
-    data = await service.create(payload.model_dump(), current_user.user_id)
+    data = await service.create(payload.model_dump(), current_user.user_id, request.state.request_id)
     return success_response("Cita creada", data, status_code=201)
 
 
 @router.put("/{appointment_id}")
 async def update_appointment(
+    request: Request,
     appointment_id: int,
     payload: AppointmentUpdate,
     service: AppointmentService = Depends(get_appointment_service),
     current_user=Depends(require_roles(Role.PLANEADOR, Role.ADMIN)),
 ):
-    data = await service.update(appointment_id, payload.model_dump(), current_user.user_id)
+    data = await service.update(appointment_id, payload.model_dump(), current_user.user_id, request.state.request_id)
     return success_response("Cita actualizada", data)
 
 
 @router.delete("/{appointment_id}")
 async def delete_appointment(
+    request: Request,
     appointment_id: int,
     service: AppointmentService = Depends(get_appointment_service),
     current_user=Depends(require_roles(Role.PLANEADOR, Role.ADMIN)),
 ):
-    await service.delete(appointment_id, current_user.user_id)
+    await service.delete(appointment_id, current_user.user_id, request.state.request_id)
     return success_response("Cita eliminada")
 
 
 @router.post("/{appointment_id}/checkin")
 async def checkin(
+    request: Request,
     appointment_id: int,
     payload: AppointmentCheckIn,
     service: AppointmentService = Depends(get_appointment_service),
     current_user=Depends(require_roles(Role.PORTERIA, Role.ADMIN)),
 ):
-    data = await service.checkin(appointment_id, payload.model_dump(), current_user.user_id)
+    data = await service.checkin(appointment_id, payload.model_dump(), current_user.user_id, request.state.request_id)
     return success_response("Check-in exitoso", data)
 
 
 @router.post("/{appointment_id}/assign")
 async def assign(
+    request: Request,
     appointment_id: int,
     payload: AssignResourcesPayload,
     service: AppointmentService = Depends(get_appointment_service),
     current_user=Depends(require_roles(Role.SUPERVISOR, Role.ADMIN)),
 ):
-    data = await service.assign(appointment_id, payload.model_dump(), current_user.user_id)
+    data = await service.assign(appointment_id, payload.model_dump(), current_user.user_id, request.state.request_id)
     return success_response("Recursos asignados", data)
 
 
 @router.post("/{appointment_id}/reassign")
 async def reassign(
+    request: Request,
     appointment_id: int,
     payload: AssignResourcesPayload,
     service: AppointmentService = Depends(get_appointment_service),
     current_user=Depends(require_roles(Role.SUPERVISOR, Role.ADMIN)),
 ):
-    data = await service.reassign(appointment_id, payload.model_dump(), current_user.user_id)
+    data = await service.reassign(appointment_id, payload.model_dump(), current_user.user_id, request.state.request_id)
     return success_response("Recursos reasignados", data)
 
 
 @router.post("/{appointment_id}/start-process")
 async def start_process(
+    request: Request,
     appointment_id: int,
     payload: StartProcessPayload,
     service: AppointmentService = Depends(get_appointment_service),
     current_user=Depends(require_roles(Role.PLANEADOR, Role.ADMIN)),
 ):
-    data = await service.start_process(appointment_id, payload.processStartAt, current_user.user_id)
+    data = await service.start_process(
+        appointment_id,
+        payload.documentDeliveryAt,
+        payload.processStartAt,
+        current_user.user_id,
+        request.state.request_id,
+    )
     return success_response("Proceso iniciado", data)
 
 
 @router.post("/{appointment_id}/to-sign")
 async def to_sign(
+    request: Request,
     appointment_id: int,
     payload: ToSignPayload,
     service: AppointmentService = Depends(get_appointment_service),
     current_user=Depends(require_roles(Role.PLANEADOR, Role.ADMIN)),
 ):
-    data = await service.to_sign(appointment_id, payload.processEndAt, current_user.user_id)
+    data = await service.to_sign(appointment_id, payload.processEndAt, current_user.user_id, request.state.request_id)
     return success_response("Cita en firma", data)
 
 
 @router.post("/{appointment_id}/finalize")
 async def finalize(
+    request: Request,
     appointment_id: int,
     payload: FinalizePayload,
     service: AppointmentService = Depends(get_appointment_service),
     current_user=Depends(require_roles(Role.SUPERVISOR, Role.ADMIN)),
 ):
-    data = await service.finalize(appointment_id, payload.model_dump(), current_user.user_id)
+    data = await service.finalize(appointment_id, payload.model_dump(), current_user.user_id, request.state.request_id)
     return success_response("Cita finalizada", data)
 
 
 @router.post("/{appointment_id}/checkout")
 async def checkout(
+    request: Request,
     appointment_id: int,
     payload: CheckoutPayload,
     service: AppointmentService = Depends(get_appointment_service),
     current_user=Depends(require_roles(Role.PORTERIA, Role.ADMIN)),
 ):
-    data = await service.checkout(appointment_id, payload.checkoutAt, current_user.user_id)
+    data = await service.checkout(appointment_id, payload.checkoutAt, current_user.user_id, request.state.request_id)
     return success_response("Checkout exitoso", data)
 
 
 @router.post("/{appointment_id}/cancel")
 async def cancel(
+    request: Request,
     appointment_id: int,
     payload: CancelPayload,
     service: AppointmentService = Depends(get_appointment_service),
     current_user=Depends(require_roles(Role.SUPERVISOR, Role.ADMIN)),
 ):
-    data = await service.cancel(appointment_id, payload.cancellationReason, current_user.user_id)
+    data = await service.cancel(
+        appointment_id,
+        payload.cancellationReason,
+        current_user.user_id,
+        request.state.request_id,
+    )
     return success_response("Operación cancelada", data)

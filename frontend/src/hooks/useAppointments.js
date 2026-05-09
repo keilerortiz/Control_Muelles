@@ -9,12 +9,40 @@ export function useAppointments(params) {
   });
 }
 
+export function useAppointmentDetail(appointmentId) {
+  return useQuery({
+    queryKey: ["appointment-detail", appointmentId],
+    queryFn: () => appointmentsService.detail(appointmentId),
+    enabled: Boolean(appointmentId),
+  });
+}
+
+export function useAppointmentStatusLog(appointmentId) {
+  return useQuery({
+    queryKey: ["appointment-status-log", appointmentId],
+    queryFn: () => appointmentsService.statusLog(appointmentId),
+    enabled: Boolean(appointmentId),
+  });
+}
+
+export function useAppointmentCandidates(appointmentId, enabled = true) {
+  return useQuery({
+    queryKey: ["appointment-candidates", appointmentId],
+    queryFn: () => appointmentsService.candidates(appointmentId),
+    enabled: Boolean(appointmentId) && enabled,
+    staleTime: 5_000,
+  });
+}
+
 export function useAppointmentActions() {
   const queryClient = useQueryClient();
 
   const invalidate = async () => {
     await queryClient.invalidateQueries({ queryKey: ["appointments"] });
     await queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
+    await queryClient.invalidateQueries({ queryKey: ["appointment-detail"] });
+    await queryClient.invalidateQueries({ queryKey: ["appointment-status-log"] });
+    await queryClient.invalidateQueries({ queryKey: ["appointment-candidates"] });
   };
 
   const makeMutation = (mutationFn) =>

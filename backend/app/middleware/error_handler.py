@@ -17,9 +17,9 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
             return error_response(
                 message=exc.message,
                 error_code=exc.error_code,
-                request_id=request.state.request_id,
+                correlation_id=request.state.request_id,
                 status_code=exc.status_code,
-                data={"details": exc.details},
+                data=exc.details,
             )
         except Exception as exc:
             logger.exception(
@@ -30,6 +30,6 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
             return error_response(
                 message="Error interno",
                 error_code="SERVER_ERROR",
-                request_id=request.state.request_id,
+                correlation_id=request.state.request_id,
                 status_code=500,
             )

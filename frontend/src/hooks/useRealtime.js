@@ -1,8 +1,10 @@
 import { useEffect, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { useSocketStore } from "../store/socketStore";
 
 export function useRealtime() {
+  const queryClient = useQueryClient();
   const syncState = useSocketStore((state) => state.syncState);
   const setSyncState = useSocketStore((state) => state.setSyncState);
   const markMessage = useSocketStore((state) => state.markMessage);
@@ -21,7 +23,19 @@ export function useRealtime() {
       }
       setSyncState("LIVE");
     };
-    socket.onmessage = () => {
+    socket.onmessage = (event) => {
+      try {
+        const parsed = JSON.parse(event.data);
+        if (parsed?.channel === "appointment-changed") {
+          queryClient.invalidateQueries({ queryKey: ["appointments"] });
+          queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
+          queryClient.invalidateQueries({ queryKey: ["appointment-detail"] });
+          queryClient.invalidateQueries({ queryKey: ["appointment-status-log"] });
+          queryClient.invalidateQueries({ queryKey: ["appointment-candidates"] });
+        }
+      } catch {
+        // Keep the sync indicator resilient even if the payload is malformed.
+      }
       markMessage();
       setSyncState("LIVE");
     };
@@ -44,7 +58,7 @@ export function useRealtime() {
         shouldCloseWhenOpen = true;
       }
     };
-  }, [markMessage, setSyncState]);
+  }, [markMessage, queryClient, setSyncState]);
 
   const badgeColor = useMemo(() => {
     if (syncState === "LIVE") return "text-success-700";

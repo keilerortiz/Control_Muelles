@@ -26,6 +26,7 @@ export function DashboardPage() {
   }
 
   const appointments = appointmentsQuery.data?.items || [];
+  const alerts = summaryQuery.data?.alerts || [];
 
   return (
     <div className="space-y-4">
@@ -35,7 +36,7 @@ export function DashboardPage() {
         <div className="xl:col-span-2">
           <AppointmentsTable rows={appointments} />
         </div>
-        <AlertsPanel appointments={appointments} />
+        <AlertsPanel alerts={alerts} />
       </div>
     </div>
   );

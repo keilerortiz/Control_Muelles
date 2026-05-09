@@ -11,6 +11,11 @@ export const appointmentsService = {
     return response.data.data;
   },
 
+  async statusLog(appointmentId) {
+    const response = await apiClient.get(`/appointments/${appointmentId}/status-log`);
+    return response.data.data;
+  },
+
   async candidates(appointmentId) {
     const response = await apiClient.get(`/appointments/${appointmentId}/candidates`);
     return response.data.data;
