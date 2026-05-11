@@ -1,3 +1,4 @@
+// src/pages/AppointmentsPage.jsx
 import { useEffect, useMemo, useState } from "react";
 
 import { AppointmentActionModal } from "../components/domain/AppointmentActionModal";
@@ -7,6 +8,7 @@ import {
   actionLabels,
   appointmentStatuses,
   getErrorMessage,
+  statusLabels,
 } from "../domain/appointmentsConfig";
 import {
   useAppointmentCandidates,
@@ -23,11 +25,18 @@ import { ErrorState } from "../components/ui/ErrorState";
 import { Input } from "../components/ui/Input";
 import { Loader } from "../components/ui/Loader";
 import { Select } from "../components/ui/Select";
+import { useDateRangeStore } from "../store/dateRangeStore";
+import { getDateRangeParams } from "../utils/dateRange";
 
 const createAllowedRoles = ["PLANEADOR", "ADMIN"];
 const candidateActions = new Set(["assign", "reassign"]);
 
-export function AppointmentsPage() {
+export function AppointmentsPage({
+  title = "Citas operativas",
+  headerContent = null,
+  emptyTitle = "Sin citas",
+  emptyDescription = "No hay resultados para el filtro actual.",
+}) {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [status, setStatus] = useState("");
@@ -36,6 +45,8 @@ export function AppointmentsPage() {
   const [actionError, setActionError] = useState("");
 
   const roles = useAuthStore((state) => state.user?.roles || []);
+  const range = useDateRangeStore((state) => state.range);
+  const dateRangeParams = useMemo(() => getDateRangeParams(range), [range]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 150);
@@ -47,6 +58,7 @@ export function AppointmentsPage() {
     take: 50,
     search: debouncedSearch || undefined,
     status: status || undefined,
+    ...dateRangeParams,
   });
   const detailQuery = useAppointmentDetail(selectedAppointmentId);
   const statusLogQuery = useAppointmentStatusLog(selectedAppointmentId);
@@ -60,6 +72,13 @@ export function AppointmentsPage() {
     const firstAppointmentId = appointmentsQuery.data?.items?.[0]?.Id;
     if (!selectedAppointmentId && firstAppointmentId) {
       setSelectedAppointmentId(firstAppointmentId);
+    }
+  }, [appointmentsQuery.data?.items, selectedAppointmentId]);
+
+  useEffect(() => {
+    const rows = appointmentsQuery.data?.items || [];
+    if (selectedAppointmentId && !rows.some((row) => row.Id === selectedAppointmentId)) {
+      setSelectedAppointmentId(rows[0]?.Id || null);
     }
   }, [appointmentsQuery.data?.items, selectedAppointmentId]);
 
@@ -143,12 +162,16 @@ export function AppointmentsPage() {
   const rows = appointmentsQuery.data?.items || [];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 px-4 sm:px-6 lg:px-8">
+      {headerContent}
+
       <Card
-        title="Citas operativas"
+        title={title}
         actions={
           canCreate ? (
-            <Button onClick={() => openAction("create")}>{actionLabels.create}</Button>
+            <Button className="w-full sm:w-auto" onClick={() => openAction("create")}>
+              {actionLabels.create}
+            </Button>
           ) : null
         }
       >
@@ -159,11 +182,15 @@ export function AppointmentsPage() {
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Buscar..."
           />
-          <Select label="Estado" value={status} onChange={(event) => setStatus(event.target.value)}>
+          <Select
+            label="Estado"
+            value={status}
+            onChange={(event) => setStatus(event.target.value)}
+          >
             <option value="">Todos</option>
             {appointmentStatuses.map((statusItem) => (
               <option key={statusItem} value={statusItem}>
-                {statusItem}
+                {statusLabels[statusItem] || statusItem}
               </option>
             ))}
           </Select>
@@ -171,10 +198,10 @@ export function AppointmentsPage() {
       </Card>
 
       {rows.length === 0 ? (
-        <EmptyState title="Sin citas" description="No hay resultados para el filtro actual." />
+        <EmptyState title={emptyTitle} description={emptyDescription} />
       ) : (
-        <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
-          <div className="space-y-4">
+        <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[1.4fr_1fr]">
+          <div className="min-w-0 flex-1">
             <AppointmentsTable
               rows={rows}
               selectedAppointmentId={selectedAppointmentId}
@@ -182,7 +209,7 @@ export function AppointmentsPage() {
             />
           </div>
 
-          <div className="space-y-4">
+          <div className="min-w-0 flex-1">
             {detailQuery.isLoading && selectedAppointmentId ? (
               <Card title="Detalle de cita">
                 <div className="flex items-center justify-center py-8">
@@ -203,7 +230,7 @@ export function AppointmentsPage() {
 
       <AppointmentActionModal
         action={activeAction}
-        appointment={selectedAppointment}
+        appointment={activeAction === "create" ? null : selectedAppointment}
         open={Boolean(activeAction)}
         onClose={closeAction}
         onSubmit={handleActionSubmit}

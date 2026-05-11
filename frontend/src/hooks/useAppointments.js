@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-
 import { appointmentsService } from "../services/appointmentsService";
+
+// ============================================
+// QUERIES
+// ============================================
 
 export function useAppointments(params) {
   return useQuery({
@@ -34,34 +37,202 @@ export function useAppointmentCandidates(appointmentId, enabled = true) {
   });
 }
 
-export function useAppointmentActions() {
+// ============================================
+// MUTATIONS (individuales)
+// ============================================
+
+// Helper para invalidar queries comunes después de una mutación
+function useInvalidateQueries() {
   const queryClient = useQueryClient();
 
-  const invalidate = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["appointments"] });
-    await queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
-    await queryClient.invalidateQueries({ queryKey: ["appointment-detail"] });
-    await queryClient.invalidateQueries({ queryKey: ["appointment-status-log"] });
-    await queryClient.invalidateQueries({ queryKey: ["appointment-candidates"] });
+  const invalidateListAndDashboard = () => {
+    queryClient.invalidateQueries({ queryKey: ["appointments"] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
   };
 
-  const makeMutation = (mutationFn) =>
-    useMutation({
-      mutationFn,
-      onSuccess: invalidate,
-    });
+  const invalidateAppointment = (appointmentId) => {
+    queryClient.invalidateQueries({ queryKey: ["appointment-detail", appointmentId] });
+    queryClient.invalidateQueries({ queryKey: ["appointment-status-log", appointmentId] });
+    queryClient.invalidateQueries({ queryKey: ["appointment-candidates", appointmentId] });
+  };
+
+  return { invalidateListAndDashboard, invalidateAppointment };
+}
+
+export function useCreateAppointment() {
+  const queryClient = useQueryClient();
+  const { invalidateListAndDashboard } = useInvalidateQueries();
+
+  return useMutation({
+    mutationFn: appointmentsService.create,
+    onSuccess: () => {
+      invalidateListAndDashboard();
+    },
+  });
+}
+
+export function useUpdateAppointment() {
+  const queryClient = useQueryClient();
+  const { invalidateListAndDashboard, invalidateAppointment } = useInvalidateQueries();
+
+  return useMutation({
+    mutationFn: ({ appointmentId, payload }) =>
+      appointmentsService.update(appointmentId, payload),
+    onSuccess: (_, { appointmentId }) => {
+      invalidateListAndDashboard();
+      invalidateAppointment(appointmentId);
+    },
+  });
+}
+
+export function useRemoveAppointment() {
+  const queryClient = useQueryClient();
+  const { invalidateListAndDashboard } = useInvalidateQueries();
+
+  return useMutation({
+    mutationFn: appointmentsService.remove,
+    onSuccess: () => {
+      invalidateListAndDashboard();
+    },
+  });
+}
+
+export function useCheckinAppointment() {
+  const queryClient = useQueryClient();
+  const { invalidateListAndDashboard, invalidateAppointment } = useInvalidateQueries();
+
+  return useMutation({
+    mutationFn: ({ appointmentId, payload }) =>
+      appointmentsService.checkin(appointmentId, payload),
+    onSuccess: (_, { appointmentId }) => {
+      invalidateListAndDashboard();
+      invalidateAppointment(appointmentId);
+    },
+  });
+}
+
+export function useAssignAppointment() {
+  const queryClient = useQueryClient();
+  const { invalidateListAndDashboard, invalidateAppointment } = useInvalidateQueries();
+
+  return useMutation({
+    mutationFn: ({ appointmentId, payload }) =>
+      appointmentsService.assign(appointmentId, payload),
+    onSuccess: (_, { appointmentId }) => {
+      invalidateListAndDashboard();
+      invalidateAppointment(appointmentId);
+    },
+  });
+}
+
+export function useReassignAppointment() {
+  const queryClient = useQueryClient();
+  const { invalidateListAndDashboard, invalidateAppointment } = useInvalidateQueries();
+
+  return useMutation({
+    mutationFn: ({ appointmentId, payload }) =>
+      appointmentsService.reassign(appointmentId, payload),
+    onSuccess: (_, { appointmentId }) => {
+      invalidateListAndDashboard();
+      invalidateAppointment(appointmentId);
+    },
+  });
+}
+
+export function useStartProcessAppointment() {
+  const queryClient = useQueryClient();
+  const { invalidateListAndDashboard, invalidateAppointment } = useInvalidateQueries();
+
+  return useMutation({
+    mutationFn: ({ appointmentId, payload }) =>
+      appointmentsService.startProcess(appointmentId, payload),
+    onSuccess: (_, { appointmentId }) => {
+      invalidateListAndDashboard();
+      invalidateAppointment(appointmentId);
+    },
+  });
+}
+
+export function useToSignAppointment() {
+  const queryClient = useQueryClient();
+  const { invalidateListAndDashboard, invalidateAppointment } = useInvalidateQueries();
+
+  return useMutation({
+    mutationFn: ({ appointmentId, payload }) =>
+      appointmentsService.toSign(appointmentId, payload),
+    onSuccess: (_, { appointmentId }) => {
+      invalidateListAndDashboard();
+      invalidateAppointment(appointmentId);
+    },
+  });
+}
+
+export function useFinalizeAppointment() {
+  const queryClient = useQueryClient();
+  const { invalidateListAndDashboard, invalidateAppointment } = useInvalidateQueries();
+
+  return useMutation({
+    mutationFn: ({ appointmentId, payload }) =>
+      appointmentsService.finalize(appointmentId, payload),
+    onSuccess: (_, { appointmentId }) => {
+      invalidateListAndDashboard();
+      invalidateAppointment(appointmentId);
+    },
+  });
+}
+
+export function useCheckoutAppointment() {
+  const queryClient = useQueryClient();
+  const { invalidateListAndDashboard, invalidateAppointment } = useInvalidateQueries();
+
+  return useMutation({
+    mutationFn: ({ appointmentId, payload }) =>
+      appointmentsService.checkout(appointmentId, payload),
+    onSuccess: (_, { appointmentId }) => {
+      invalidateListAndDashboard();
+      invalidateAppointment(appointmentId);
+    },
+  });
+}
+
+export function useCancelAppointment() {
+  const queryClient = useQueryClient();
+  const { invalidateListAndDashboard, invalidateAppointment } = useInvalidateQueries();
+
+  return useMutation({
+    mutationFn: ({ appointmentId, payload }) =>
+      appointmentsService.cancel(appointmentId, payload),
+    onSuccess: (_, { appointmentId }) => {
+      invalidateListAndDashboard();
+      invalidateAppointment(appointmentId);
+    },
+  });
+}
+
+export function useAppointmentActions() {
+  const create = useCreateAppointment();
+  const update = useUpdateAppointment();
+  const remove = useRemoveAppointment();
+  const checkin = useCheckinAppointment();
+  const assign = useAssignAppointment();
+  const reassign = useReassignAppointment();
+  const startProcess = useStartProcessAppointment();
+  const toSign = useToSignAppointment();
+  const finalize = useFinalizeAppointment();
+  const checkout = useCheckoutAppointment();
+  const cancel = useCancelAppointment();
 
   return {
-    create: makeMutation(appointmentsService.create),
-    update: makeMutation(({ appointmentId, payload }) => appointmentsService.update(appointmentId, payload)),
-    remove: makeMutation(appointmentsService.remove),
-    checkin: makeMutation(({ appointmentId, payload }) => appointmentsService.checkin(appointmentId, payload)),
-    assign: makeMutation(({ appointmentId, payload }) => appointmentsService.assign(appointmentId, payload)),
-    reassign: makeMutation(({ appointmentId, payload }) => appointmentsService.reassign(appointmentId, payload)),
-    startProcess: makeMutation(({ appointmentId, payload }) => appointmentsService.startProcess(appointmentId, payload)),
-    toSign: makeMutation(({ appointmentId, payload }) => appointmentsService.toSign(appointmentId, payload)),
-    finalize: makeMutation(({ appointmentId, payload }) => appointmentsService.finalize(appointmentId, payload)),
-    checkout: makeMutation(({ appointmentId, payload }) => appointmentsService.checkout(appointmentId, payload)),
-    cancel: makeMutation(({ appointmentId, payload }) => appointmentsService.cancel(appointmentId, payload)),
+    create,
+    update,
+    remove,
+    checkin,
+    assign,
+    reassign,
+    startProcess,
+    toSign,
+    finalize,
+    checkout,
+    cancel,
   };
 }

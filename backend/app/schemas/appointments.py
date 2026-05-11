@@ -9,6 +9,10 @@ class AppointmentCreate(BaseModel):
     vehicleTypeId: int
     estimatedTons: float = Field(gt=0)
     scheduledAt: datetime
+    driverName: str | None = None
+    driverDocument: str | None = None
+    vehiclePlate: str | None = None
+    nonComplianceComment: str | None = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -74,5 +78,7 @@ class AppointmentListQuery(BaseModel):
     take: int = 20
     search: str | None = None
     status: str | None = None
+    date_from: datetime | None = None
+    date_to: datetime | None = None
 
     model_config = ConfigDict(extra="forbid")

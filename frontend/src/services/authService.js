@@ -8,14 +8,23 @@ export const authService = {
 
   async refresh() {
     try {
-      const response = await apiClient.post("/auth/refresh", { device_info: "web" });
-      return response.data.data.accessToken;
-    } catch {
+      const response = await apiClient.post("/auth/refresh", { 
+        device_info: navigator.userAgent || "web" 
+      });
+      return response.data.data?.accessToken ?? null;
+    } catch (error) {
+      // Solo registramos el error, no lo lanzamos
+      console.warn("Refresh token failed:", error?.response?.status || error.message);
       return null;
     }
   },
 
   async logout() {
-    await apiClient.post("/auth/logout");
+    try {
+      await apiClient.post("/auth/logout");
+    } catch (error) {
+      // Fallo silencioso: el backend quizás ya no reconoce el token
+      console.debug("Logout error (ignored):", error);
+    }
   },
 };

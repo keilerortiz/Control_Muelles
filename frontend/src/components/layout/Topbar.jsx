@@ -1,13 +1,16 @@
 import { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Bell, ChevronDown, LogOut, Menu } from "lucide-react";
 import { useRealtime } from "../../hooks/useRealtime";
 import { useAuthStore } from "../../store/authStore";
+import { getRouteLabel } from "../../domain/roleNavigation";
 import { Badge } from "../ui/Badge";
+import { DateRangePicker } from "../ui/DateRangePicker";
 import iceStarSmallLogo from "../icons/icon-icestar.png";
 
 export function Topbar({ onMenuClick }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { syncState } = useRealtime();
   const { user, clearSession } = useAuthStore();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -29,12 +32,11 @@ export function Topbar({ onMenuClick }) {
   };
 
   const userInitial = user?.name ? user.name.charAt(0).toUpperCase() : "U";
+  const routeLabel = getRouteLabel(location.pathname);
 
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-neutral-200 bg-white/95 px-4 shadow-sm backdrop-blur-sm sm:px-6">
-      {/* Sección izquierda: menú hamburguesa + logo */}
-      <div className="flex items-center gap-2">
-        {/* Botón hamburguesa (solo visible en móvil) */}
+      <div className="flex items-center gap-3">
         <button
           onClick={onMenuClick}
           className="rounded-lg p-1 text-neutral-500 transition-colors hover:bg-neutral-100 lg:hidden"
@@ -49,34 +51,39 @@ export function Topbar({ onMenuClick }) {
           alt="IceStar"
           className="h-8 w-8 rounded-lg object-contain"
         />
-        <span className="text-base font-semibold text-neutral-800 sm:text-lg">
-          Muelles
-        </span>
-        <span className="hidden text-xs text-neutral-400 sm:inline">|</span>
-        <span className="hidden text-sm text-neutral-500 sm:inline">
-          Control en tiempo real
-        </span>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-base font-semibold text-neutral-800 sm:text-lg">
+              Muelles
+            </span>
+            <span className="hidden text-xs text-neutral-400 sm:inline">|</span>
+            <span className="hidden text-sm text-neutral-500 sm:inline">
+              {routeLabel}
+            </span>
+          </div>
+          <p className="hidden text-xs text-neutral-400 sm:block">
+            Control en tiempo real
+          </p>
+        </div>
       </div>
 
-      {/* Acciones derecha (sin cambios) */}
-      <div className="flex items-center gap-3 sm:gap-4">
+      <div className="flex items-center gap-2 sm:gap-4">
+        <div className="hidden md:block">
+          <DateRangePicker />
+        </div>
+
         <Badge status={syncState} className="hidden sm:inline-flex">
           {syncState === "connected"
-            ? "En vivo"
+            ? "Live"
             : syncState === "connecting"
-            ? "Conectando..."
-            : "Sin conexión"}
+            ? "Connecting..."
+            : "Offline"}
         </Badge>
 
-        <button
-          className="relative rounded-full p-1.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-600"
-          aria-label="Notificaciones"
-        >
-          <Bell className="h-5 w-5" strokeWidth={1.5} />
-          <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-error-500 ring-2 ring-white" />
-        </button>
+        <div className="md:hidden">
+          <DateRangePicker />
+        </div>
 
-        {/* Menú de usuario */}
         <div className="relative" ref={menuRef}>
           <button
             onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}

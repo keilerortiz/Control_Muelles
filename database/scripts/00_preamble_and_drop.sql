@@ -14,9 +14,11 @@ IF OBJECT_ID('dbo.tbl_AppointmentOperator', 'U') IS NOT NULL DROP TABLE dbo.tbl_
 IF OBJECT_ID('dbo.tbl_AppointmentStatusLog', 'U') IS NOT NULL DROP TABLE dbo.tbl_AppointmentStatusLog;
 IF OBJECT_ID('dbo.tbl_RefreshToken', 'U') IS NOT NULL DROP TABLE dbo.tbl_RefreshToken;
 IF OBJECT_ID('dbo.tbl_Appointment', 'U') IS NOT NULL DROP TABLE dbo.tbl_Appointment;
+IF OBJECT_ID('dbo.tbl_BusinessRule', 'U') IS NOT NULL DROP TABLE dbo.tbl_BusinessRule;
 IF OBJECT_ID('dbo.tbl_DockCapability', 'U') IS NOT NULL DROP TABLE dbo.tbl_DockCapability;
 IF OBJECT_ID('dbo.tbl_Operator', 'U') IS NOT NULL DROP TABLE dbo.tbl_Operator;
 IF OBJECT_ID('dbo.tbl_Dock', 'U') IS NOT NULL DROP TABLE dbo.tbl_Dock;
+IF OBJECT_ID('dbo.tbl_Standard', 'U') IS NOT NULL DROP TABLE dbo.tbl_Standard;
 IF OBJECT_ID('dbo.tbl_VehicleType', 'U') IS NOT NULL DROP TABLE dbo.tbl_VehicleType;
 IF OBJECT_ID('dbo.tbl_OperationType', 'U') IS NOT NULL DROP TABLE dbo.tbl_OperationType;
 IF OBJECT_ID('dbo.tbl_Client', 'U') IS NOT NULL DROP TABLE dbo.tbl_Client;

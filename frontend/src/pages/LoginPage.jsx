@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 
+import { getDefaultRouteForRoles } from "../domain/roleNavigation";
 import { useAuth } from "../hooks/useAuth";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
@@ -51,8 +52,8 @@ export function LoginPage() {
 
   const onSubmit = handleSubmit(async (values) => {
     try {
-      await loginMutation.mutateAsync(values);
-      navigate("/dashboard", { replace: true });
+      const session = await loginMutation.mutateAsync(values);
+      navigate(getDefaultRouteForRoles(session.user?.roles || []), { replace: true });
     } catch {
       // Error handled via loginMutation.error and rendered in UI.
     }
@@ -132,6 +133,7 @@ export function LoginPage() {
             <form className="space-y-5" onSubmit={onSubmit} noValidate>
               <Input
                 label="Correo electrónico"
+                required
                 type="email"
                 autoComplete="email"
                 placeholder="usuario@icestarlatam.com"
@@ -143,6 +145,7 @@ export function LoginPage() {
                 <div className="relative">
                   <Input
                     label="Contraseña"
+                    required
                     type={showPassword ? "text" : "password"}
                     autoComplete="current-password"
                     placeholder="••••••••"

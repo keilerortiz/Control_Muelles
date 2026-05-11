@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, Query, Request
 
 from app.api.v1.appointments.dependencies import get_appointment_service
@@ -22,10 +24,12 @@ router = APIRouter(prefix="/appointments", tags=["appointments"])
 
 @router.get("/dashboard-summary")
 async def dashboard_summary(
+    date_from: datetime | None = Query(default=None),
+    date_to: datetime | None = Query(default=None),
     service: AppointmentService = Depends(get_appointment_service),
     _=Depends(require_roles(Role.ADMIN, Role.CONSULTOR, Role.PLANEADOR, Role.PORTERIA, Role.SUPERVISOR)),
 ):
-    data = await service.dashboard_summary()
+    data = await service.dashboard_summary(date_from=date_from, date_to=date_to)
     return success_response("Dashboard operativo", data)
 
 
@@ -35,10 +39,19 @@ async def list_appointments(
     take: int = Query(default=20, ge=1, le=100),
     search: str | None = None,
     status: str | None = None,
+    date_from: datetime | None = Query(default=None),
+    date_to: datetime | None = Query(default=None),
     service: AppointmentService = Depends(get_appointment_service),
     _=Depends(require_roles(Role.ADMIN, Role.CONSULTOR, Role.PLANEADOR, Role.PORTERIA, Role.SUPERVISOR)),
 ):
-    data = await service.list_appointments(skip=skip, take=take, search=search, status=status)
+    data = await service.list_appointments(
+        skip=skip,
+        take=take,
+        search=search,
+        status=status,
+        date_from=date_from,
+        date_to=date_to,
+    )
     return success_response("Listado obtenido", data)
 
 

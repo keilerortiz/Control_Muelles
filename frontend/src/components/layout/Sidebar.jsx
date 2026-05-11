@@ -1,23 +1,9 @@
 // src/components/layout/Sidebar.jsx
 import { Link, useLocation } from "react-router-dom";
-import { Calendar, ChevronLeft, ChevronRight, LayoutGrid, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
+import { roleNavigationItems } from "../../domain/roleNavigation";
 import { useUIStore } from "../../store/uiStore";
-
-const navItems = [
-  {
-    to: "/dashboard",
-    label: "Dashboard",
-    icon: <LayoutGrid className="h-5 w-5" strokeWidth={1.5} />,
-    roles: ["ADMIN", "CONSULTOR", "SUPERVISOR", "PLANEADOR", "PORTERIA"],
-  },
-  {
-    to: "/appointments",
-    label: "Citas",
-    icon: <Calendar className="h-5 w-5" strokeWidth={1.5} />,
-    roles: ["ADMIN", "SUPERVISOR", "PLANEADOR", "PORTERIA", "CONSULTOR"],
-  },
-];
 
 export function Sidebar({ isOpen = false, onClose }) {
   const location = useLocation();
@@ -54,10 +40,11 @@ export function Sidebar({ isOpen = false, onClose }) {
 
       {/* Navegación */}
       <nav className="flex-1 space-y-1 px-2">
-        {navItems
+        {roleNavigationItems
           .filter((item) => item.roles.some((role) => roles.includes(role)))
           .map((item) => {
             const isActive = location.pathname.startsWith(item.to);
+            const Icon = item.Icon;
             return (
               <Link
                 key={item.to}
@@ -70,7 +57,9 @@ export function Sidebar({ isOpen = false, onClose }) {
                 } ${collapsed ? "justify-center" : ""}`}
                 title={collapsed ? item.label : ""}
               >
-                <span className="flex-shrink-0">{item.icon}</span>
+                <span className="flex-shrink-0">
+                  <Icon className="h-5 w-5" strokeWidth={1.5} />
+                </span>
                 {!collapsed && <span>{item.label}</span>}
               </Link>
             );

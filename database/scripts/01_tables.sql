@@ -46,6 +46,18 @@ CREATE TABLE dbo.tbl_OperationType (
     CONSTRAINT PK_tbl_OperationType PRIMARY KEY (Id)
 );
 
+CREATE TABLE dbo.tbl_Standard (
+    Id INT IDENTITY(1,1) NOT NULL,
+    Name NVARCHAR(150) NOT NULL,
+    StandardTimeMinutes INT NOT NULL,
+    ToleranceMinutes INT NOT NULL DEFAULT 0,
+    Description NVARCHAR(500) NULL,
+    IsActive BIT NOT NULL DEFAULT 1,
+    CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    UpdatedAt DATETIME2 NULL,
+    CONSTRAINT PK_tbl_Standard PRIMARY KEY (Id)
+);
+
 CREATE TABLE dbo.tbl_VehicleType (
     Id INT IDENTITY(1,1) NOT NULL,
     Name NVARCHAR(150) NOT NULL,
@@ -84,6 +96,23 @@ CREATE TABLE dbo.tbl_DockCapability (
     CONSTRAINT FK_tbl_DockCapability_tbl_Dock FOREIGN KEY (DockId) REFERENCES dbo.tbl_Dock(Id),
     CONSTRAINT FK_tbl_DockCapability_tbl_OperationType FOREIGN KEY (OperationTypeId) REFERENCES dbo.tbl_OperationType(Id),
     CONSTRAINT FK_tbl_DockCapability_tbl_VehicleType FOREIGN KEY (VehicleTypeId) REFERENCES dbo.tbl_VehicleType(Id)
+);
+
+CREATE TABLE dbo.tbl_BusinessRule (
+    Id INT IDENTITY(1,1) NOT NULL,
+    ClientId INT NOT NULL,
+    VehicleTypeId INT NOT NULL,
+    OperationTypeId INT NOT NULL,
+    StandardId INT NOT NULL,
+    IsActive BIT NOT NULL DEFAULT 1,
+    CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    UpdatedAt DATETIME2 NULL,
+    CONSTRAINT PK_tbl_BusinessRule PRIMARY KEY (Id),
+    CONSTRAINT UQ_tbl_BusinessRule UNIQUE (ClientId, VehicleTypeId, OperationTypeId),
+    CONSTRAINT FK_tbl_BusinessRule_tbl_Client FOREIGN KEY (ClientId) REFERENCES dbo.tbl_Client(Id),
+    CONSTRAINT FK_tbl_BusinessRule_tbl_VehicleType FOREIGN KEY (VehicleTypeId) REFERENCES dbo.tbl_VehicleType(Id),
+    CONSTRAINT FK_tbl_BusinessRule_tbl_OperationType FOREIGN KEY (OperationTypeId) REFERENCES dbo.tbl_OperationType(Id),
+    CONSTRAINT FK_tbl_BusinessRule_tbl_Standard FOREIGN KEY (StandardId) REFERENCES dbo.tbl_Standard(Id)
 );
 CREATE TABLE dbo.tbl_Appointment (
     Id INT IDENTITY(1,1) NOT NULL,

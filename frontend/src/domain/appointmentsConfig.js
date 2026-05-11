@@ -1,3 +1,16 @@
+// ============================================
+// Constantes de roles (para evitar typos)
+// ============================================
+export const ROLES = {
+  PLANNER: "PLANEADOR",
+  ADMIN: "ADMIN",
+  GATE: "PORTERIA",
+  SUPERVISOR: "SUPERVISOR",
+};
+
+// ============================================
+// Estados de citas
+// ============================================
 export const appointmentStatuses = [
   "AGENDADA",
   "EN_PATIO",
@@ -9,21 +22,20 @@ export const appointmentStatuses = [
   "OPERACION_CANCELADA",
 ];
 
-export const appointmentMasterData = {
-  clients: [
-    { value: 1, label: "Cliente A" },
-    { value: 2, label: "Cliente B" },
-  ],
-  operationTypes: [
-    { value: 1, label: "Descargue" },
-    { value: 2, label: "Cargue" },
-  ],
-  vehicleTypes: [
-    { value: 1, label: "Camion Sencillo" },
-    { value: 2, label: "Tractomula" },
-  ],
+export const statusLabels = {
+  AGENDADA: "Agendada",
+  EN_PATIO: "En patio",
+  ENTREGA_DOCUMENTOS: "Entrega documentos",
+  EN_PROCESO: "En proceso",
+  PARA_FIRMAR: "Para firmar",
+  FINALIZADO: "Finalizado",
+  ATENDIDA: "Atendida",
+  OPERACION_CANCELADA: "Operación cancelada",
 };
 
+// ============================================
+// Etiquetas de acciones (vistas)
+// ============================================
 export const actionLabels = {
   create: "Nueva cita",
   edit: "Editar",
@@ -38,55 +50,93 @@ export const actionLabels = {
   cancel: "Cancelar",
 };
 
+// ============================================
+// Matriz de acciones por estado y rol
+// ============================================
 export const actionMatrix = {
   AGENDADA: [
-    { key: "edit", roles: ["PLANEADOR", "ADMIN"] },
-    { key: "remove", roles: ["PLANEADOR", "ADMIN"] },
-    { key: "checkin", roles: ["PORTERIA", "ADMIN"] },
+    { key: "edit", roles: [ROLES.PLANNER, ROLES.ADMIN] },
+    { key: "remove", roles: [ROLES.PLANNER, ROLES.ADMIN] },
+    { key: "checkin", roles: [ROLES.GATE, ROLES.ADMIN] },
   ],
   EN_PATIO: [
-    { key: "assign", roles: ["SUPERVISOR", "ADMIN"] },
-    { key: "cancel", roles: ["SUPERVISOR", "ADMIN"] },
+    { key: "assign", roles: [ROLES.SUPERVISOR, ROLES.ADMIN] },
+    { key: "cancel", roles: [ROLES.SUPERVISOR, ROLES.ADMIN] },
   ],
-  ENTREGA_DOCUMENTOS: [{ key: "startProcess", roles: ["PLANEADOR", "ADMIN"] }],
+  ENTREGA_DOCUMENTOS: [{ key: "startProcess", roles: [ROLES.PLANNER, ROLES.ADMIN] }],
   EN_PROCESO: [
-    { key: "reassign", roles: ["SUPERVISOR", "ADMIN"] },
-    { key: "toSign", roles: ["PLANEADOR", "ADMIN"] },
-    { key: "cancel", roles: ["SUPERVISOR", "ADMIN"] },
+    { key: "reassign", roles: [ROLES.SUPERVISOR, ROLES.ADMIN] },
+    { key: "toSign", roles: [ROLES.PLANNER, ROLES.ADMIN] },
+    { key: "cancel", roles: [ROLES.SUPERVISOR, ROLES.ADMIN] },
   ],
-  PARA_FIRMAR: [{ key: "finalize", roles: ["SUPERVISOR", "ADMIN"] }],
-  FINALIZADO: [{ key: "checkout", roles: ["PORTERIA", "ADMIN"] }],
+  PARA_FIRMAR: [{ key: "finalize", roles: [ROLES.SUPERVISOR, ROLES.ADMIN] }],
+  FINALIZADO: [{ key: "checkout", roles: [ROLES.GATE, ROLES.ADMIN] }],
   ATENDIDA: [],
   OPERACION_CANCELADA: [],
 };
 
+/**
+ * Obtiene las acciones disponibles para un estado y rol(es) dados.
+ * @param {string} status - Estado de la cita (ej: "AGENDADA")
+ * @param {string[]} roles - Array de roles del usuario (ej: ["ADMIN"])
+ * @returns {Array<{key: string, roles: string[]}>}
+ */
 export function getAvailableActions(status, roles) {
   const actionConfig = actionMatrix[status] || [];
   return actionConfig.filter((action) => action.roles.some((role) => roles.includes(role)));
 }
 
+// ============================================
+// Utilidades de fechas (para inputs datetime-local)
+// ============================================
+/**
+ * Convierte una fecha (Date o string ISO) a formato YYYY-MM-DDThh:mm para <input type="datetime-local">
+ * Ajusta la zona horaria local para que el input muestre la fecha/hora correcta.
+ */
 export function toDateTimeLocalValue(value) {
   if (!value) return "";
-  const normalized = new Date(value);
-  const timezoneOffset = normalized.getTimezoneOffset() * 60_000;
-  return new Date(normalized.getTime() - timezoneOffset).toISOString().slice(0, 16);
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return "";
+  const offset = date.getTimezoneOffset() * 60000;
+  const localISOTime = new Date(date.getTime() - offset).toISOString().slice(0, 16);
+  return localISOTime;
 }
 
+/**
+ * Convierte un valor de input datetime-local (YYYY-MM-DDThh:mm) a ISO string UTC.
+ */
 export function fromDateTimeLocalValue(value) {
   if (!value) return null;
-  return new Date(value).toISOString();
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return null;
+  return date.toISOString();
 }
 
+/**
+ * Formatea una fecha para mostrar al usuario (ej: "31/12/2023, 14:30")
+ */
 export function formatDateTime(value) {
   if (!value) return "-";
-  return new Date(value).toLocaleString();
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return "-";
+  return date.toLocaleString();
 }
 
+// ============================================
+// Manejo de errores de API
+// ============================================
+/**
+ * Extrae un mensaje de error legible desde un error de Axios u objeto Error.
+ */
 export function getErrorMessage(error) {
-  return (
-    error?.response?.data?.message ||
-    error?.response?.data?.error?.code ||
-    error?.message ||
-    "No fue posible completar la operación."
-  );
+  // Errores de Axios con respuesta del backend
+  if (error?.response?.data?.message) {
+    return error.response.data.message;
+  }
+  // Error estándar de JS
+  if (error?.message) {
+    return error.message;
+  }
+  // Fallback genérico
+  return "No fue posible completar la operación.";
 }
