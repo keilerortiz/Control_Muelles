@@ -38,8 +38,10 @@ function Invoke-SqlBatchFile {
     )
 
     $sqlContent = Get-Content $Path -Raw
-    $batches = [System.Text.RegularExpressions.Regex]::Split($sqlContent, '(?im)^\s*GO\s*$') |
-        Where-Object { $_.Trim() -ne "" }
+    $batches = @(
+        [System.Text.RegularExpressions.Regex]::Split($sqlContent, '(?im)^\s*GO\s*$') |
+            Where-Object { $_.Trim() -ne "" }
+    )
 
     $command = $Connection.CreateCommand()
     $command.CommandTimeout = 120
