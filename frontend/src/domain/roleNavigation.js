@@ -1,4 +1,4 @@
-import { BarChart3, CalendarClock, ClipboardList, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { BarChart3, CalendarClock, ClipboardList, MonitorDot, ShieldCheck, SlidersHorizontal } from "lucide-react";
 
 export const roleRoutes = {
   CONSULTOR: "/consultor",
@@ -13,6 +13,12 @@ export const roleNavigationItems = [
     to: "/consultor",
     label: "Consultoría",
     Icon: BarChart3,
+    roles: ["CONSULTOR", "ADMIN"],
+  },
+  {
+    to: "/consultor/citas",
+    label: "Citas (consulta)",
+    Icon: CalendarClock,
     roles: ["CONSULTOR", "ADMIN"],
   },
   {
@@ -32,6 +38,12 @@ export const roleNavigationItems = [
     label: "Supervisión",
     Icon: ShieldCheck,
     roles: ["SUPERVISOR", "ADMIN"],
+  },
+  {
+    to: "/vista-operativa-muelles",
+    label: "Tiempo real muelles",
+    Icon: MonitorDot,
+    roles: ["SUPERVISOR", "PLANEADOR", "CONSULTOR", "ADMIN"],
   },
   {
     to: "/portero",

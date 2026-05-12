@@ -17,7 +17,6 @@ import { getAvailableActions, formatDateTime, actionLabels } from "../../domain/
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
-import { EmptyState } from "../ui/EmptyState";
 import { TablePagination } from "../ui/TablePagination";
 
 const PAGE_SIZE = 10;
@@ -91,11 +90,11 @@ export function AppointmentDetailPanel({
 
   if (!appointment) {
     return (
-      <Card title="Detalle de cita">
-        <EmptyState
-          title="Selecciona una cita"
-          description="Aquí verás el estado, historial y acciones permitidas para la operación seleccionada."
-        />
+      <Card title="Detalle de cita" padding="sm">
+        <div className="rounded-lg border border-neutral-200 bg-white px-3 py-2">
+          <p className="text-sm font-medium text-neutral-700">Selecciona una cita</p>
+          <p className="text-xs text-neutral-500">Sin selección actual.</p>
+        </div>
       </Card>
     );
   }
@@ -240,7 +239,7 @@ export function AppointmentDetailPanel({
           title={`Cita #${appointment.Id}`}
           actions={<Badge status={appointment.Status} />}
           className={detailFullHeight ? "h-full" : historyFullHeight ? "shrink-0" : ""}
-          contentClassName={detailFullHeight ? "h-full" : ""}
+          contentClassName={detailFullHeight ? "h-full" : "max-h-[36vh] overflow-y-auto sm:max-h-none sm:overflow-visible"}
         >
           <div className={`grid gap-4 md:grid-cols-2 ${detailFullHeight ? "auto-rows-min" : ""}`}>
             <DetailField label="Cliente" value={appointment.ClientName} icon={User} />
@@ -250,7 +249,10 @@ export function AppointmentDetailPanel({
             <DetailField label="Cédula conductor" value={appointment.DriverDocument} icon={Hash} />
             <DetailField label="Placa" value={appointment.VehiclePlate} icon={Hash} />
             <DetailField label="Muelle" value={appointment.DockName} icon={Warehouse} />
-            <DetailField label="Obs" value={appointment.NonComplianceComment} icon={FileCheck} />
+            <DetailField label="Precintos" value={appointment.Precincts} icon={FileCheck} />
+            <DetailField label="Observaciones" value={appointment.NonComplianceComment} icon={FileCheck} />
+            <DetailField label="Senior's" value={appointment.SeniorOperators} icon={FileCheck} />
+            <DetailField label="Junior's" value={appointment.JuniorOperators} icon={FileCheck} />
           </div>
         </Card>
       )}

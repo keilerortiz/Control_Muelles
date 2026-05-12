@@ -53,6 +53,9 @@ class AppointmentDevStoreCommandsMixin:
             "OtcNonComplianceReason": None,
             "OtsNonComplianceReason": None,
             "CancellationReason": None,
+            "SeniorOperators": None,
+            "JuniorOperators": None,
+            "AssignedOperatorIds": [],
             "IsNoShow": False,
             "IsLateArrival": False,
             "LateArrivalMinutes": None,
@@ -106,8 +109,24 @@ class AppointmentDevStoreCommandsMixin:
         item["ArrivalAt"] = to_iso(datetime.now(UTC))
         return self._transition(appointment_id, "EN_PATIO", user_id)
 
+    def _set_assigned_operators(self, item: dict[str, Any], operator_ids: list[int]) -> None:
+        unique_operator_ids = list(dict.fromkeys(operator_ids))
+        seniors = []
+        juniors = []
+        for operator_id in unique_operator_ids:
+            operator = self._operators_catalog.get(operator_id)
+            if not operator:
+                continue
+            if operator["OperatorLevel"] == "SENIOR":
+                seniors.append(operator["Name"])
+            elif operator["OperatorLevel"] == "JUNIOR":
+                juniors.append(operator["Name"])
+        item["AssignedOperatorIds"] = unique_operator_ids
+        item["SeniorOperators"] = ", ".join(seniors) if seniors else None
+        item["JuniorOperators"] = ", ".join(juniors) if juniors else None
+
     def assign(
-        self, appointment_id: int, dock_id: int, candidates_version: int, user_id: int
+        self, appointment_id: int, dock_id: int, operator_ids: list[int], candidates_version: int, user_id: int
     ) -> dict[str, Any]:
         item = self._get(appointment_id)
         if item["Status"] != "EN_PATIO":
@@ -117,10 +136,11 @@ class AppointmentDevStoreCommandsMixin:
         self._validate_candidates_version(candidates_version)
         item["DockId"] = dock_id
         item["DockName"] = f"Muelle {dock_id}"
+        self._set_assigned_operators(item, operator_ids)
         return self._transition(appointment_id, "ENTREGA_DOCUMENTOS", user_id)
 
     def reassign(
-        self, appointment_id: int, dock_id: int, candidates_version: int, user_id: int
+        self, appointment_id: int, dock_id: int, operator_ids: list[int], candidates_version: int, user_id: int
     ) -> dict[str, Any]:
         item = self._get(appointment_id)
         if item["Status"] != "EN_PROCESO":
@@ -130,6 +150,7 @@ class AppointmentDevStoreCommandsMixin:
         self._validate_candidates_version(candidates_version)
         item["DockId"] = dock_id
         item["DockName"] = f"Muelle {dock_id}"
+        self._set_assigned_operators(item, operator_ids)
         return self._transition(appointment_id, "EN_PROCESO", user_id)
 
     def start_process(

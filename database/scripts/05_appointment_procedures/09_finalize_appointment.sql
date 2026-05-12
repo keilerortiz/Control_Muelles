@@ -35,7 +35,7 @@ BEGIN
             @documentDelivery = a.DocumentDeliveryAt,
             @processStart = a.ProcessStartAt,
             @processEnd = a.ProcessEndAt,
-            @standardTime = ot.StandardTimeMinutes,
+            @standardTime = COALESCE(s.StandardTimeMinutes, ot.StandardTimeMinutes),
             @currentFinalizedAt = a.FinalizedAt,
             @currentMovedWeightKg = a.MovedWeightKg,
             @currentOtcReason = a.OtcNonComplianceReason,
@@ -43,6 +43,14 @@ BEGIN
             @currentComment = a.NonComplianceComment
         FROM dbo.tbl_Appointment a
         INNER JOIN dbo.tbl_OperationType ot ON ot.Id = a.OperationTypeId
+        LEFT JOIN dbo.tbl_BusinessRule br
+            ON br.ClientId = a.ClientId
+           AND br.OperationTypeId = a.OperationTypeId
+           AND br.VehicleTypeId = a.VehicleTypeId
+           AND br.IsActive = 1
+        LEFT JOIN dbo.tbl_Standard s
+            ON s.Id = br.StandardId
+           AND s.IsActive = 1
         WHERE a.Id = @AppointmentId AND a.IsDeleted = 0;
 
         IF @currentStatus IS NULL THROW 50043, 'RESOURCE_NOT_FOUND', 1;

@@ -26,6 +26,7 @@ export function AppRouter() {
 
             <Route element={<RoleRoute allowedRoles={["CONSULTOR", "ADMIN"]} />}>
               <Route path="/consultor" element={privateRouteByPath["/consultor"]} />
+              <Route path="/consultor/citas" element={privateRouteByPath["/consultor/citas"]} />
             </Route>
 
             <Route element={<RoleRoute allowedRoles={["ADMIN"]} />}>
@@ -38,6 +39,10 @@ export function AppRouter() {
 
             <Route element={<RoleRoute allowedRoles={["SUPERVISOR", "ADMIN"]} />}>
               <Route path="/supervisor" element={privateRouteByPath["/supervisor"]} />
+            </Route>
+
+            <Route element={<RoleRoute allowedRoles={["SUPERVISOR", "PLANEADOR", "CONSULTOR", "ADMIN"]} />}>
+              <Route path="/vista-operativa-muelles" element={privateRouteByPath["/vista-operativa-muelles"]} />
             </Route>
 
             <Route element={<RoleRoute allowedRoles={["PORTERIA", "ADMIN"]} />}>

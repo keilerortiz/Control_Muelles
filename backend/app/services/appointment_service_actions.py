@@ -48,7 +48,7 @@ class AppointmentServiceActionsMixin:
                 correlation_id,
             ),
             lambda: DEV_APPOINTMENTS_STORE.assign(
-                appointment_id, payload["dockId"], payload["candidatesVersion"], user_id
+                appointment_id, payload["dockId"], operator_ids, payload["candidatesVersion"], user_id
             ),
         )
 
@@ -75,7 +75,7 @@ class AppointmentServiceActionsMixin:
                 correlation_id,
             ),
             lambda: DEV_APPOINTMENTS_STORE.reassign(
-                appointment_id, payload["dockId"], payload["candidatesVersion"], user_id
+                appointment_id, payload["dockId"], operator_ids, payload["candidatesVersion"], user_id
             ),
         )
 

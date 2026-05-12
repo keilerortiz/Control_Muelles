@@ -11,6 +11,18 @@ export const apiClient = axios.create({
 });
 
 let refreshPromise = null;
+const AUTH_STORAGE_KEY = "auth-storage";
+
+function getPersistedAccessToken() {
+  try {
+    const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.state?.accessToken ?? null;
+  } catch {
+    return null;
+  }
+}
 
 apiClient.interceptors.request.use((config) => {
   const accessToken = useAuthStore.getState().accessToken;
@@ -53,6 +65,14 @@ apiClient.interceptors.response.use(
         useAuthStore.getState().setAccessToken(accessToken);
         originalRequest.headers = originalRequest.headers || {};
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+        return apiClient.request(originalRequest);
+      }
+
+      const persistedAccessToken = getPersistedAccessToken();
+      if (persistedAccessToken && persistedAccessToken !== useAuthStore.getState().accessToken) {
+        useAuthStore.getState().setAccessToken(persistedAccessToken);
+        originalRequest.headers = originalRequest.headers || {};
+        originalRequest.headers.Authorization = `Bearer ${persistedAccessToken}`;
         return apiClient.request(originalRequest);
       }
 

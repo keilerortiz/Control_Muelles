@@ -7,6 +7,21 @@ from app.services.appointment_service_common import CANDIDATES_TTL_SECONDS
 
 
 class AppointmentDevStoreQueriesMixin:
+    def get_active_operator_ids_by_level(self, appointment_id: int) -> dict[str, list[int]]:
+        item = self._appointments.get(appointment_id) or {}
+        assigned_ids = item.get("AssignedOperatorIds") or []
+        seniors = []
+        juniors = []
+        for operator_id in assigned_ids:
+            operator = self._operators_catalog.get(operator_id)
+            if not operator:
+                continue
+            if operator["OperatorLevel"] == "SENIOR":
+                seniors.append(operator_id)
+            elif operator["OperatorLevel"] == "JUNIOR":
+                juniors.append(operator_id)
+        return {"seniorIds": seniors, "juniorIds": juniors}
+
     def dashboard_summary(self, date_from=None, date_to=None) -> dict[str, Any]:
         items = [
             item
@@ -78,4 +93,32 @@ class AppointmentDevStoreQueriesMixin:
 
     def candidates(self, appointment_id: int) -> dict[str, Any]:
         generated_at = int(datetime.now(UTC).timestamp())
-        return {"appointmentId": appointment_id, "version": generated_at, "generatedAt": generated_at, "expiresAt": generated_at + CANDIDATES_TTL_SECONDS, "ttlSeconds": CANDIDATES_TTL_SECONDS, "docks": [{"Id": 1, "Name": "Muelle 1"}, {"Id": 2, "Name": "Muelle 2"}, {"Id": 3, "Name": "Muelle 3"}], "operators": [{"Id": 1, "Name": "Operario Senior 1", "OperatorLevel": "SENIOR", "MaxConcurrentOperations": 1, "ActiveAssignments": 0}, {"Id": 2, "Name": "Operario Junior 1", "OperatorLevel": "JUNIOR", "MaxConcurrentOperations": 1, "ActiveAssignments": 0}]}
+        item = self._appointments.get(appointment_id) or {}
+        assigned_ids = set(item.get("AssignedOperatorIds") or [])
+        current_dock_id = item.get("DockId")
+
+        docks = [{"Id": 1, "Name": "Muelle 1"}, {"Id": 2, "Name": "Muelle 2"}, {"Id": 3, "Name": "Muelle 3"}]
+        if current_dock_id and not any(dock["Id"] == current_dock_id for dock in docks):
+            docks.append({"Id": current_dock_id, "Name": f"Muelle {current_dock_id}"})
+        docks = sorted(docks, key=lambda dock: dock["Name"])
+
+        operators = [
+            {"Id": 1, "Name": "Operario Senior 1", "OperatorLevel": "SENIOR", "MaxConcurrentOperations": 1, "ActiveAssignments": 0},
+            {"Id": 2, "Name": "Operario Junior 1", "OperatorLevel": "JUNIOR", "MaxConcurrentOperations": 1, "ActiveAssignments": 0},
+            {"Id": 3, "Name": "Operario Senior 2", "OperatorLevel": "SENIOR", "MaxConcurrentOperations": 1, "ActiveAssignments": 0},
+            {"Id": 4, "Name": "Operario Junior 2", "OperatorLevel": "JUNIOR", "MaxConcurrentOperations": 1, "ActiveAssignments": 0},
+        ]
+        for operator in operators:
+            operator["IsAssigned"] = operator["Id"] in assigned_ids
+
+        operators.sort(key=lambda op: (0 if op["IsAssigned"] else 1, 0 if op["OperatorLevel"] == "SENIOR" else 1, op["Name"]))
+
+        return {
+            "appointmentId": appointment_id,
+            "version": generated_at,
+            "generatedAt": generated_at,
+            "expiresAt": generated_at + CANDIDATES_TTL_SECONDS,
+            "ttlSeconds": CANDIDATES_TTL_SECONDS,
+            "docks": docks,
+            "operators": operators,
+        }

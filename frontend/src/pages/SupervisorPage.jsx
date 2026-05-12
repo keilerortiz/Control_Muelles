@@ -18,7 +18,7 @@ export function SupervisorPage() {
     <AppointmentsPage
       title="Supervisión de patio"
       headerContent={<SupervisorHeader />}
-      emptyDescription="No hay operaciones del rango seleccionado para supervisar."
+      emptyDescription="No hay información para mostrar en este momento."
     />
   );
 }

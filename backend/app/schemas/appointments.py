@@ -34,6 +34,9 @@ class AssignResourcesPayload(BaseModel):
     seniorIds: list[int]
     juniorIds: list[int] = []
     candidatesVersion: int
+    reassignDockTouched: bool = False
+    reassignSeniorTouched: bool = False
+    reassignJuniorTouched: bool = False
 
     model_config = ConfigDict(extra="forbid")
 

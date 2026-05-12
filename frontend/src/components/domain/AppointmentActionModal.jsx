@@ -1,10 +1,15 @@
 // src/components/appointments/AppointmentActionModal.jsx
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { actionLabels, formatDateTime } from "../../domain/appointmentsConfig";
+import { useMasterCatalogs } from "../../hooks/useMasters";
 import { Button } from "../ui/Button";
 import { Modal, ModalFooter } from "../ui/Modal";
 import { ActionBody } from "./appointmentActionModal/ActionBody";
-import { buildInitialForm, buildPayloadByAction } from "./appointmentActionModal/formUtils";
+import {
+  buildInitialForm,
+  buildPayloadByAction,
+  getFinalizeNonComplianceState,
+} from "./appointmentActionModal/formUtils";
 
 export function AppointmentActionModal({
   action,
@@ -17,6 +22,7 @@ export function AppointmentActionModal({
   candidates,
   candidatesLoading = false,
 }) {
+  const catalogsQuery = useMasterCatalogs();
   const [form, setForm] = useState(() =>
     buildInitialForm(appointment, candidates)
   );
@@ -43,6 +49,24 @@ export function AppointmentActionModal({
 
   const title = actionLabels[action] || "Acción";
   const [validationError, setValidationError] = useState("");
+
+  const activeBusinessRuleMinutesByKey = useMemo(() => {
+    const rules = (catalogsQuery.data?.businessRules || []).filter((rule) => rule?.IsActive);
+    const ruleMap = new Map();
+    rules.forEach((rule) => {
+      const key = `${Number(rule.ClientId)}-${Number(rule.VehicleTypeId)}-${Number(rule.OperationTypeId)}`;
+      ruleMap.set(key, Number(rule.StandardTimeMinutes) || 0);
+    });
+    return ruleMap;
+  }, [catalogsQuery.data?.businessRules]);
+
+  const appointmentEffective = useMemo(() => {
+    if (!appointment) return appointment;
+    const key = `${Number(appointment.ClientId)}-${Number(appointment.VehicleTypeId)}-${Number(appointment.OperationTypeId)}`;
+    const businessRuleMinutes = activeBusinessRuleMinutesByKey.get(key);
+    if (!businessRuleMinutes || businessRuleMinutes <= 0) return appointment;
+    return { ...appointment, StandardTimeMinutes: businessRuleMinutes };
+  }, [appointment, activeBusinessRuleMinutesByKey]);
 
   const updateValue = useCallback((key, value) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -83,6 +107,37 @@ export function AppointmentActionModal({
         return;
       }
     }
+    if (action === "assign") {
+      if (!form.dockId) {
+        setValidationError("Selecciona un muelle para asignar recursos.");
+        return;
+      }
+      if (!Array.isArray(form.seniorIds) || form.seniorIds.length === 0) {
+        setValidationError("Debes seleccionar al menos un operario senior.");
+        return;
+      }
+    }
+    if (action === "reassign") {
+      if (form.reassignSeniorTouched && (!Array.isArray(form.seniorIds) || form.seniorIds.length === 0)) {
+        setValidationError("La operación debe conservar al menos un operario senior.");
+        return;
+      }
+    }
+    if (action === "finalize") {
+      const nonComplianceState = getFinalizeNonComplianceState(appointmentEffective);
+      if (nonComplianceState.otcFail && (!Array.isArray(form.otcNonComplianceReasons) || form.otcNonComplianceReasons.length === 0)) {
+        setValidationError("Debes seleccionar al menos una causal OTC por incumplimiento.");
+        return;
+      }
+      if (nonComplianceState.otsFail && (!Array.isArray(form.otsNonComplianceReasons) || form.otsNonComplianceReasons.length === 0)) {
+        setValidationError("Debes seleccionar al menos una causal OTS por incumplimiento.");
+        return;
+      }
+      if (nonComplianceState.hasNonCompliance && !form.nonComplianceComment?.trim()) {
+        setValidationError("El comentario es obligatorio cuando hay incumplimientos OTC u OTS.");
+        return;
+      }
+    }
 
     const payloadByAction = buildPayloadByAction(form, candidates?.version);
     await onSubmit(payloadByAction[action]);
@@ -107,7 +162,7 @@ export function AppointmentActionModal({
 
         <ActionBody
           action={action}
-          appointment={appointment}
+          appointment={appointmentEffective}
           candidates={candidates}
           candidatesLoading={candidatesLoading}
           form={form}

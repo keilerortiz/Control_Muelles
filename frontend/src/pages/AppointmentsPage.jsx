@@ -101,6 +101,7 @@ export function AppointmentsPage({
   headerContent = null,
   emptyTitle = "Sin citas",
   emptyDescription = "No hay resultados para el filtro actual.",
+  readOnly = false,
 }) {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -154,13 +155,6 @@ export function AppointmentsPage({
   );
 
   useEffect(() => {
-    const firstAppointmentId = appointmentsQuery.data?.items?.[0]?.Id;
-    if (!selectedAppointmentId && firstAppointmentId) {
-      setSelectedAppointmentId(firstAppointmentId);
-    }
-  }, [appointmentsQuery.data?.items, selectedAppointmentId]);
-
-  useEffect(() => {
     const currentRows = appointmentsQuery.data?.items || [];
     const currentFilteredRows = currentRows.filter((row) => {
       const matchesClient = !clientFilter || row.ClientName === clientFilter;
@@ -171,7 +165,7 @@ export function AppointmentsPage({
     });
 
     if (selectedAppointmentId && !currentFilteredRows.some((row) => row.Id === selectedAppointmentId)) {
-      setSelectedAppointmentId(currentFilteredRows[0]?.Id || null);
+      setSelectedAppointmentId(null);
     }
   }, [appointmentsQuery.data?.items, clientFilter, operationFilter, selectedAppointmentId]);
 
@@ -180,7 +174,7 @@ export function AppointmentsPage({
     appointmentsQuery.data?.items?.find((row) => row.Id === selectedAppointmentId) ||
     null;
 
-  const canCreate = createAllowedRoles.some((role) => roles.includes(role));
+  const canCreate = !readOnly && createAllowedRoles.some((role) => roles.includes(role));
 
   const pendingMap = useMemo(
     () => ({
@@ -422,7 +416,7 @@ export function AppointmentsPage({
                 setDebouncedSearch(search);
               }
             }}
-            placeholder="Buscar..."
+            placeholder="Buscar por cliente o placa"
             className="min-h-10 min-w-[220px] flex-1 rounded-lg border-slate-200 bg-white lg:min-w-[280px]"
           />
 
@@ -506,7 +500,7 @@ export function AppointmentsPage({
                   rows={filteredRows}
                   selectedAppointmentId={selectedAppointmentId}
                   onSelect={selectAppointment}
-                  getRowActions={getRowActions}
+                  getRowActions={readOnly ? undefined : getRowActions}
                   page={page}
                   pageSize={PAGE_SIZE}
                   total={totalRows}
@@ -521,7 +515,7 @@ export function AppointmentsPage({
                   </div>
                 </Card>
               ) : (
-                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                <div className="max-h-[38vh] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-sm">
                   <AppointmentDetailPanel
                     appointment={selectedAppointment}
                     showActions={false}
@@ -560,7 +554,7 @@ export function AppointmentsPage({
                   rows={filteredRows}
                   selectedAppointmentId={selectedAppointmentId}
                   onSelect={selectAppointment}
-                  getRowActions={getRowActions}
+                  getRowActions={readOnly ? undefined : getRowActions}
                   page={page}
                   pageSize={PAGE_SIZE}
                   total={totalRows}

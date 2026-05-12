@@ -20,15 +20,20 @@ const PorteriaPage = lazy(() =>
 const SupervisorPage = lazy(() =>
   import("../pages/SupervisorPage").then((module) => ({ default: module.SupervisorPage })),
 );
+const DockLiveViewPage = lazy(() =>
+  import("../pages/DockLiveViewPage").then((module) => ({ default: module.DockLiveViewPage })),
+);
 
 export const routeConfig = {
   public: [{ path: "/login", element: <LoginPage /> }],
   private: [
     { path: "/consultor", element: <ConsultorDashboardPage /> },
+    { path: "/consultor/citas", element: <AppointmentsPage title="Citas (consulta)" readOnly /> },
     { path: "/admin", element: <AdminMastersPage /> },
     { path: "/planeador", element: <AppointmentsPage title="Planeación de citas" /> },
     { path: "/supervisor", element: <SupervisorPage /> },
     { path: "/portero", element: <PorteriaPage /> },
+    { path: "/vista-operativa-muelles", element: <DockLiveViewPage /> },
   ],
   root: <App />,
 };

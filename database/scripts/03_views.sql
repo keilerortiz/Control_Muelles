@@ -22,7 +22,7 @@ SELECT
     c.Name AS ClientName,
     a.OperationTypeId,
     ot.Name AS OperationTypeName,
-    ot.StandardTimeMinutes,
+    COALESCE(s.StandardTimeMinutes, ot.StandardTimeMinutes) AS StandardTimeMinutes,
     a.VehicleTypeId,
     vt.Name AS VehicleTypeName,
     a.DriverName,
@@ -59,6 +59,14 @@ FROM dbo.tbl_Appointment a
 INNER JOIN dbo.tbl_Client c ON c.Id = a.ClientId
 INNER JOIN dbo.tbl_OperationType ot ON ot.Id = a.OperationTypeId
 INNER JOIN dbo.tbl_VehicleType vt ON vt.Id = a.VehicleTypeId
+LEFT JOIN dbo.tbl_BusinessRule br
+    ON br.ClientId = a.ClientId
+   AND br.OperationTypeId = a.OperationTypeId
+   AND br.VehicleTypeId = a.VehicleTypeId
+   AND br.IsActive = 1
+LEFT JOIN dbo.tbl_Standard s
+    ON s.Id = br.StandardId
+   AND s.IsActive = 1
 LEFT JOIN dbo.tbl_Dock d ON d.Id = a.DockId
 OUTER APPLY (
     SELECT MAX(al.AssignedAt) AS LastAssignedAt

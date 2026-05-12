@@ -39,7 +39,7 @@ function PorteriaList({ title, rows, actionKey, onAction }) {
                       <p><span className="font-medium">Nombre conductor:</span> {row.DriverName || "-"}</p>
                       <p><span className="font-medium">Cédula conductor:</span> {row.DriverDocument || "-"}</p>
                       <p><span className="font-medium">Placa:</span> {row.VehiclePlate || "-"}</p>
-                      <p><span className="font-medium">Observaciones:</span> {row.NonComplianceComment || row.Observations || "-"}</p>
+                      <p><span className="font-medium">Precintos:</span> {row.Precincts || "-"}</p>
                     </div>
                   </div>
 

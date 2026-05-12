@@ -89,13 +89,6 @@ export function ConsultorDashboardPage() {
   });
 
   useEffect(() => {
-    const firstAppointmentId = appointmentsQuery.data?.items?.[0]?.Id;
-    if (!selectedAppointmentId && firstAppointmentId) {
-      setSelectedAppointmentId(firstAppointmentId);
-    }
-  }, [appointmentsQuery.data?.items, selectedAppointmentId]);
-
-  useEffect(() => {
     setPage(1);
   }, [dateRangeParams.date_from, dateRangeParams.date_to]);
 

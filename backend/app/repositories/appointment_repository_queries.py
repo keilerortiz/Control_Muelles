@@ -6,6 +6,27 @@ from sqlalchemy import text
 
 
 class AppointmentRepositoryQueriesMixin:
+    async def get_active_operator_ids_by_level(self, appointment_id: int) -> dict[str, list[int]]:
+        result = await self.session.execute(
+            text(
+                """
+                SELECT
+                    o.OperatorLevel,
+                    o.Id AS OperatorId
+                FROM dbo.tbl_AppointmentOperator ao
+                INNER JOIN dbo.tbl_Operator o ON o.Id = ao.OperatorId
+                WHERE ao.AppointmentId = :appointment_id
+                  AND ao.IsActive = 1
+                """
+            ),
+            {"appointment_id": appointment_id},
+        )
+        rows = [dict(item) for item in result.mappings().all()]
+        return {
+            "seniorIds": [row["OperatorId"] for row in rows if row.get("OperatorLevel") == "SENIOR"],
+            "juniorIds": [row["OperatorId"] for row in rows if row.get("OperatorLevel") == "JUNIOR"],
+        }
+
     def _dashboard_base_sql(self) -> str:
         return """
             WITH base AS (
@@ -21,7 +42,7 @@ class AppointmentRepositoryQueriesMixin:
                     a.CheckoutAt,
                     assignment_metrics.LastAssignedAt,
                     operator_metrics.ActiveOperatorCount,
-                    ot.StandardTimeMinutes,
+                    COALESCE(s.StandardTimeMinutes, ot.StandardTimeMinutes) AS StandardTimeMinutes,
                     CASE
                         WHEN a.ArrivalAt IS NOT NULL AND assignment_metrics.LastAssignedAt IS NOT NULL
                         THEN CASE
@@ -45,6 +66,12 @@ class AppointmentRepositoryQueriesMixin:
                     END AS CheckoutDelayMinutes
                 FROM dbo.tbl_Appointment a
                 INNER JOIN dbo.tbl_OperationType ot ON ot.Id = a.OperationTypeId
+                LEFT JOIN dbo.tbl_BusinessRule br
+                    ON br.ClientId = a.ClientId
+                   AND br.OperationTypeId = a.OperationTypeId
+                   AND br.VehicleTypeId = a.VehicleTypeId
+                   AND br.IsActive = 1
+                LEFT JOIN dbo.tbl_Standard s ON s.Id = br.StandardId AND s.IsActive = 1
                 OUTER APPLY (
                     SELECT MAX(al.AssignedAt) AS LastAssignedAt
                     FROM dbo.tbl_AssignmentLog al
@@ -332,7 +359,53 @@ class AppointmentRepositoryQueriesMixin:
             {"appointment_id": appointment_id},
         )
         row = result.mappings().first()
-        return dict(row) if row else None
+        if not row:
+            return None
+
+        appointment = dict(row)
+        operators_result = await self.session.execute(
+            text(
+                """
+                WITH operator_source AS (
+                    SELECT ao.OperatorId
+                    FROM dbo.tbl_AppointmentOperator ao
+                    WHERE ao.AppointmentId = :appointment_id
+                      AND ao.IsActive = 1
+                    UNION ALL
+                    SELECT ao.OperatorId
+                    FROM dbo.tbl_AppointmentOperator ao
+                    WHERE ao.AppointmentId = :appointment_id
+                      AND ao.IsActive = 0
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM dbo.tbl_AppointmentOperator active_ao
+                          WHERE active_ao.AppointmentId = :appointment_id
+                            AND active_ao.IsActive = 1
+                      )
+                      AND ao.ReleasedAt = (
+                          SELECT MAX(last_ao.ReleasedAt)
+                          FROM dbo.tbl_AppointmentOperator last_ao
+                          WHERE last_ao.AppointmentId = :appointment_id
+                            AND last_ao.IsActive = 0
+                      )
+                )
+                SELECT
+                    o.OperatorLevel,
+                    o.Name
+                FROM operator_source os
+                INNER JOIN dbo.tbl_Operator o ON o.Id = os.OperatorId
+                ORDER BY o.OperatorLevel DESC, o.Name ASC
+                """
+            ),
+            {"appointment_id": appointment_id},
+        )
+        operators = [dict(item) for item in operators_result.mappings().all()]
+        seniors = [item["Name"] for item in operators if item.get("OperatorLevel") == "SENIOR"]
+        juniors = [item["Name"] for item in operators if item.get("OperatorLevel") == "JUNIOR"]
+
+        appointment["SeniorOperators"] = ", ".join(seniors) if seniors else None
+        appointment["JuniorOperators"] = ", ".join(juniors) if juniors else None
+        return appointment
 
     async def get_status_log(self, appointment_id: int) -> list[dict]:
         result = await self.session.execute(
@@ -364,27 +437,63 @@ class AppointmentRepositoryQueriesMixin:
                 SELECT d.Id, d.Name
                 FROM dbo.tbl_Dock d
                 WHERE d.IsActive = 1
-                  AND NOT EXISTS (
-                      SELECT 1
-                      FROM dbo.tbl_Appointment a
-                      WHERE a.DockId = d.Id
-                        AND a.IsDeleted = 0
-                        AND a.Status IN ('ENTREGA_DOCUMENTOS', 'EN_PROCESO')
+                  AND (
+                      d.Id = (
+                          SELECT a.DockId
+                          FROM dbo.tbl_Appointment a
+                          WHERE a.Id = :appointment_id
+                            AND a.IsDeleted = 0
+                      )
+                      OR NOT EXISTS (
+                          SELECT 1
+                          FROM dbo.tbl_Appointment a
+                          WHERE a.DockId = d.Id
+                            AND a.IsDeleted = 0
+                            AND a.Status IN ('ENTREGA_DOCUMENTOS', 'EN_PROCESO')
+                            AND a.Id <> :appointment_id
+                      )
                   )
                 ORDER BY d.Name ASC
                 """
             ),
+            {"appointment_id": appointment_id},
         )
         operator_rows = await self.session.execute(
             text(
                 """
-                SELECT Id, Name, OperatorLevel, MaxConcurrentOperations, ActiveAssignments
+                SELECT
+                    oa.Id,
+                    oa.Name,
+                    oa.OperatorLevel,
+                    oa.MaxConcurrentOperations,
+                    oa.ActiveAssignments,
+                    CASE
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM dbo.tbl_AppointmentOperator ao
+                            WHERE ao.AppointmentId = :appointment_id
+                              AND ao.OperatorId = oa.Id
+                              AND ao.IsActive = 1
+                        ) THEN 1
+                        ELSE 0
+                    END AS IsAssigned
                 FROM dbo.vw_OperatorAvailability
-                WHERE IsActive = 1
-                  AND ActiveAssignments < MaxConcurrentOperations
-                ORDER BY OperatorLevel DESC, Name ASC
+                oa
+                WHERE oa.IsActive = 1
+                  AND (
+                      oa.ActiveAssignments < oa.MaxConcurrentOperations
+                      OR EXISTS (
+                          SELECT 1
+                          FROM dbo.tbl_AppointmentOperator ao
+                          WHERE ao.AppointmentId = :appointment_id
+                            AND ao.OperatorId = oa.Id
+                            AND ao.IsActive = 1
+                      )
+                  )
+                ORDER BY IsAssigned DESC, oa.OperatorLevel DESC, oa.Name ASC
                 """
-            )
+            ),
+            {"appointment_id": appointment_id},
         )
         generated_at = int(datetime.utcnow().timestamp())
         return {

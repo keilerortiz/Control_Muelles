@@ -16,6 +16,12 @@ class AppointmentDevStoreBase:
         now = datetime.now(UTC)
         scheduled = now + timedelta(hours=2)
         self._next_id = 2
+        self._operators_catalog: dict[int, dict[str, Any]] = {
+            1: {"Id": 1, "Name": "Operario Senior 1", "OperatorLevel": "SENIOR"},
+            2: {"Id": 2, "Name": "Operario Junior 1", "OperatorLevel": "JUNIOR"},
+            3: {"Id": 3, "Name": "Operario Senior 2", "OperatorLevel": "SENIOR"},
+            4: {"Id": 4, "Name": "Operario Junior 2", "OperatorLevel": "JUNIOR"},
+        }
         self._appointments: dict[int, dict[str, Any]] = {
             1: {
                 "Id": 1, "ClientId": 1, "ClientName": "Cliente A", "OperationTypeId": 1, "OperationTypeName": "Descargue",
@@ -25,6 +31,7 @@ class AppointmentDevStoreBase:
                 "ProcessStartAt": None, "ProcessEndAt": None, "FinalizedAt": None, "CheckoutAt": None, "CancelledAt": None,
                 "Remissions": None, "Precincts": None, "MovedWeightKg": None, "NonComplianceComment": None,
                 "OtcNonComplianceReason": None, "OtsNonComplianceReason": None, "CancellationReason": None, "IsNoShow": False,
+                "SeniorOperators": None, "JuniorOperators": None, "AssignedOperatorIds": [],
                 "IsLateArrival": False, "LateArrivalMinutes": None, "Version": 1, "CreatedAt": to_iso(now), "UpdatedAt": to_iso(now),
             }
         }
