@@ -6,4 +6,12 @@ CREATE INDEX IX_tbl_AppointmentOperator_Active
 ON dbo.tbl_AppointmentOperator(OperatorId, IsActive)
 INCLUDE (AppointmentId);
 
+CREATE INDEX IX_tbl_AppointmentOperator_Appointment_Active
+ON dbo.tbl_AppointmentOperator(AppointmentId, IsActive)
+INCLUDE (OperatorId);
+
+CREATE INDEX IX_tbl_AssignmentLog_Appointment_AssignedAt
+ON dbo.tbl_AssignmentLog(AppointmentId, AssignedAt DESC)
+INCLUDE (DockId, OperatorId, IsActive);
+
 GO

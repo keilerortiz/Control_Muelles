@@ -3,7 +3,12 @@ __pycache__
 *.pyo
 *.pyd
 .venv
+venv
+.deps
 .pytest_cache
+pytest-cache-files-*
 .mypy_cache
 .ruff_cache
 .env
+*.log
+*.err.log

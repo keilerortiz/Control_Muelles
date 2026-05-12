@@ -15,7 +15,7 @@ export function DashboardPage() {
   const { syncState } = useRealtime();
   const range = useDateRangeStore((state) => state.range);
   const dateRangeParams = useMemo(() => getDateRangeParams(range), [range]);
-  const summaryQuery = useDashboard(dateRangeParams);
+  const summaryQuery = useDashboard(dateRangeParams, { realtimeConnected: syncState === "CONNECTED" });
   const appointmentsQuery = useAppointments({ skip: 0, take: 20, ...dateRangeParams });
 
   if (summaryQuery.isLoading || appointmentsQuery.isLoading) {
@@ -35,7 +35,7 @@ export function DashboardPage() {
   const alerts = summaryQuery.data?.alerts || [];
 
   return (
-    <div className="space-y-4 px-4 sm:px-6 lg:px-8">
+    <div className="space-y-4 px-2 sm:px-3 lg:px-4">
       <p className="text-xs sm:text-sm text-neutral-500 break-words">Sincronización: {syncState}</p>
       <KpiCards summary={summaryQuery.data} />
       <div className="flex flex-col gap-4 xl:grid xl:grid-cols-3">

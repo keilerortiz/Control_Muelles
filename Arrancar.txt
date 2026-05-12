@@ -1,0 +1,8 @@
+Back:
+cd "C:\Users\psig\OneDrive - Frigorifico Andino\Excelencia Operacional\Keiler\Desarrollos\Control_Muelles\backend"
+.\.venv\Scripts\Activate.ps1
+python .\run_dev.py
+
+Front:
+cd "C:\Users\psig\OneDrive - Frigorifico Andino\Excelencia Operacional\Keiler\Desarrollos\Control_Muelles\frontend"
+npm run dev

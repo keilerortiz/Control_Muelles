@@ -8,7 +8,8 @@ export function useMasterCatalogs(options = {}) {
   return useQuery({
     queryKey: ["master-catalogs"],
     queryFn: mastersService.catalogs,
-    staleTime: 30_000,
+    staleTime: 300_000,
+    gcTime: 900_000,
     ...options,
   });
 }
@@ -16,7 +17,7 @@ export function useMasterCatalogs(options = {}) {
 // ============================================
 // MUTATIONS (individuales)
 // ============================================
-function useInvalidateMasterCatalogs() {
+export function useInvalidateMasterCatalogs() {
   const queryClient = useQueryClient();
   return () => queryClient.invalidateQueries({ queryKey: ["master-catalogs"] });
 }
@@ -25,7 +26,12 @@ export function useCreateMaster() {
   const invalidate = useInvalidateMasterCatalogs();
   return useMutation({
     mutationFn: ({ resource, payload }) => mastersService.create(resource, payload),
-    onSuccess: invalidate,
+    onSuccess: (_data, variables) => {
+      if (variables?.skipInvalidate) {
+        return;
+      }
+      invalidate();
+    },
   });
 }
 
@@ -33,7 +39,12 @@ export function useUpdateMaster() {
   const invalidate = useInvalidateMasterCatalogs();
   return useMutation({
     mutationFn: ({ resource, id, payload }) => mastersService.update(resource, id, payload),
-    onSuccess: invalidate,
+    onSuccess: (_data, variables) => {
+      if (variables?.skipInvalidate) {
+        return;
+      }
+      invalidate();
+    },
   });
 }
 
@@ -41,7 +52,12 @@ export function useRemoveMaster() {
   const invalidate = useInvalidateMasterCatalogs();
   return useMutation({
     mutationFn: ({ resource, id }) => mastersService.remove(resource, id),
-    onSuccess: invalidate,
+    onSuccess: (_data, variables) => {
+      if (variables?.skipInvalidate) {
+        return;
+      }
+      invalidate();
+    },
   });
 }
 

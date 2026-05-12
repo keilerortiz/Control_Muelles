@@ -40,13 +40,13 @@ export const actionLabels = {
   create: "Nueva cita",
   edit: "Editar",
   remove: "Eliminar",
-  checkin: "Check-in",
+  checkin: "Ingreso",
   assign: "Asignar",
   reassign: "Reasignar",
   startProcess: "Iniciar proceso",
-  toSign: "Pasar a firma",
+  toSign: "Pasar a firmar",
   finalize: "Finalizar",
-  checkout: "Checkout",
+  checkout: "Salida",
   cancel: "Cancelar",
 };
 
@@ -75,6 +75,17 @@ export const actionMatrix = {
   OPERACION_CANCELADA: [],
 };
 
+function parseApiDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+  if (typeof value !== "string") return null;
+
+  const hasTimezone = /([zZ]|[+\-]\d{2}:\d{2})$/.test(value);
+  const normalized = hasTimezone ? value : `${value}Z`;
+  const date = new Date(normalized);
+  return isNaN(date.getTime()) ? null : date;
+}
+
 /**
  * Obtiene las acciones disponibles para un estado y rol(es) dados.
  * @param {string} status - Estado de la cita (ej: "AGENDADA")
@@ -95,8 +106,8 @@ export function getAvailableActions(status, roles) {
  */
 export function toDateTimeLocalValue(value) {
   if (!value) return "";
-  const date = new Date(value);
-  if (isNaN(date.getTime())) return "";
+  const date = parseApiDate(value);
+  if (!date) return "";
   const offset = date.getTimezoneOffset() * 60000;
   const localISOTime = new Date(date.getTime() - offset).toISOString().slice(0, 16);
   return localISOTime;
@@ -117,8 +128,8 @@ export function fromDateTimeLocalValue(value) {
  */
 export function formatDateTime(value) {
   if (!value) return "-";
-  const date = new Date(value);
-  if (isNaN(date.getTime())) return "-";
+  const date = parseApiDate(value);
+  if (!date) return "-";
   return date.toLocaleString();
 }
 

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.constants import Role
 
@@ -42,7 +42,7 @@ class BusinessRulePayload(BaseModel):
 
 class UserCreatePayload(BaseModel):
     name: str = Field(min_length=1, max_length=150)
-    email: EmailStr
+    email: str = Field(min_length=3, max_length=255)
     password: str = Field(min_length=8, max_length=128)
     roleCodes: list[str] = Field(min_length=1)
     isActive: bool = True
@@ -53,6 +53,17 @@ class UserCreatePayload(BaseModel):
     @classmethod
     def normalize_name(cls, value: str) -> str:
         return value.strip()
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if "@" not in normalized or normalized.startswith("@") or normalized.endswith("@"):
+            raise ValueError("Correo inválido")
+        local_part, domain_part = normalized.split("@", 1)
+        if not local_part or not domain_part:
+            raise ValueError("Correo inválido")
+        return normalized
 
     @field_validator("roleCodes")
     @classmethod
@@ -66,7 +77,7 @@ class UserCreatePayload(BaseModel):
 
 class UserUpdatePayload(BaseModel):
     name: str = Field(min_length=1, max_length=150)
-    email: EmailStr
+    email: str = Field(min_length=3, max_length=255)
     password: str | None = Field(default=None, min_length=8, max_length=128)
     roleCodes: list[str] = Field(min_length=1)
     isActive: bool = True
@@ -77,6 +88,17 @@ class UserUpdatePayload(BaseModel):
     @classmethod
     def normalize_name(cls, value: str) -> str:
         return value.strip()
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if "@" not in normalized or normalized.startswith("@") or normalized.endswith("@"):
+            raise ValueError("Correo inválido")
+        local_part, domain_part = normalized.split("@", 1)
+        if not local_part or not domain_part:
+            raise ValueError("Correo inválido")
+        return normalized
 
     @field_validator("password")
     @classmethod

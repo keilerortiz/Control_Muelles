@@ -2,24 +2,25 @@
 import { forwardRef } from "react";
 import clsx from "clsx";
 
-// Variantes de estilo (coherentes con el resto de la UI)
+// Variantes de estilo
 const variants = {
-  primary: "bg-brand-600 text-white hover:bg-brand-700 focus:ring-brand-500",
+  primary:
+    "border border-brand-600 bg-brand-600 text-white shadow-sm shadow-neutral-900/10 hover:border-brand-700 hover:bg-brand-700 focus:ring-brand-500 active:bg-brand-800",
   secondary:
-    "bg-white text-neutral-700 border border-neutral-300 hover:bg-neutral-50 focus:ring-neutral-500",
+    "border border-neutral-200 bg-white text-neutral-700 shadow-sm shadow-neutral-900/5 hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-900 focus:ring-neutral-400 active:bg-neutral-100",
   outline:
-    "bg-transparent text-neutral-700 border border-neutral-300 hover:bg-neutral-50 focus:ring-neutral-500",
+    "border border-neutral-300 bg-transparent text-neutral-700 hover:border-neutral-400 hover:bg-neutral-50 hover:text-neutral-900 focus:ring-neutral-400 active:bg-neutral-100",
   ghost:
-    "bg-transparent text-neutral-700 hover:bg-neutral-100 focus:ring-neutral-500",
+    "border border-transparent bg-transparent text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900 focus:ring-neutral-400 active:bg-neutral-200",
   danger:
-    "bg-error-600 text-white hover:bg-error-700 focus:ring-error-500",
+    "border border-error-600 bg-error-600 text-white shadow-sm shadow-neutral-900/10 hover:border-error-700 hover:bg-error-700 focus:ring-error-500 active:bg-error-800",
 };
 
 // Tamaños
 const sizes = {
-  sm: "px-2.5 py-1.5 text-xs",
-  md: "px-3 py-2 text-sm",
-  lg: "px-4 py-2.5 text-base",
+  sm: "h-8 px-3 text-xs",
+  md: "h-9 px-3.5 text-sm",
+  lg: "h-10 px-4 text-sm",
 };
 
 export const Button = forwardRef(
@@ -40,18 +41,31 @@ export const Button = forwardRef(
       <button
         ref={ref}
         className={clsx(
-          "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2",
+          "inline-flex items-center justify-center gap-2 rounded-xl font-semibold leading-none",
+          "transition-all duration-200 ease-out",
+          "focus:outline-none focus:ring-4 focus:ring-offset-0",
+          "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
+          "select-none whitespace-nowrap",
           variants[variant],
           sizes[size],
-          disabled && "cursor-not-allowed opacity-50",
           className
         )}
         disabled={disabled}
         {...props}
       >
-        {leftIcon && <span className="flex-shrink-0">{leftIcon}</span>}
-        {children}
-        {rightIcon && <span className="flex-shrink-0">{rightIcon}</span>}
+        {leftIcon && (
+          <span className="flex shrink-0 items-center justify-center [&>svg]:h-4 [&>svg]:w-4">
+            {leftIcon}
+          </span>
+        )}
+
+        <span className="truncate">{children}</span>
+
+        {rightIcon && (
+          <span className="flex shrink-0 items-center justify-center [&>svg]:h-4 [&>svg]:w-4">
+            {rightIcon}
+          </span>
+        )}
       </button>
     );
   }

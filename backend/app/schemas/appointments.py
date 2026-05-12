@@ -39,20 +39,17 @@ class AssignResourcesPayload(BaseModel):
 
 
 class StartProcessPayload(BaseModel):
-    documentDeliveryAt: datetime
-    processStartAt: datetime
+    remissions: str
+    precincts: str
 
     model_config = ConfigDict(extra="forbid")
 
 
 class ToSignPayload(BaseModel):
-    processEndAt: datetime
-
     model_config = ConfigDict(extra="forbid")
 
 
 class FinalizePayload(BaseModel):
-    finalizedAt: datetime
     movedWeightKg: float = Field(ge=0)
     otcNonComplianceReason: str | None = None
     otsNonComplianceReason: str | None = None
@@ -62,8 +59,6 @@ class FinalizePayload(BaseModel):
 
 
 class CheckoutPayload(BaseModel):
-    checkoutAt: datetime
-
     model_config = ConfigDict(extra="forbid")
 
 

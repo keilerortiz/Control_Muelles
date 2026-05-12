@@ -91,6 +91,8 @@ npm run dev
 docker compose --env-file .env.example up --build
 ```
 
+Para validacion productiva, revisar [PRODUCTION_READINESS.md](./PRODUCTION_READINESS.md).
+
 ## Credenciales semilla
 
 - Email: `admin@muelles.local`

@@ -142,14 +142,14 @@ class MasterDataService:
         )
 
     async def _create_user_db(self, payload: dict) -> dict:
-        if await self.repository.find_user_by_email(payload["email"]):
-            raise AppError("Ya existe un usuario con ese correo", error_code="VALIDATION_ERROR", status_code=409)
-
-        role_ids = await self.repository.get_role_ids(payload["roleCodes"])
-        if len(role_ids) != len(payload["roleCodes"]):
-            raise AppError("Uno o más roles no existen", error_code="VALIDATION_ERROR", status_code=400)
-
         async def action() -> dict:
+            if await self.repository.find_user_by_email(payload["email"]):
+                raise AppError("Ya existe un usuario con ese correo", error_code="VALIDATION_ERROR", status_code=409)
+
+            role_ids = await self.repository.get_role_ids(payload["roleCodes"])
+            if len(role_ids) != len(payload["roleCodes"]):
+                raise AppError("Uno o más roles no existen", error_code="VALIDATION_ERROR", status_code=400)
+
             user_id = await self.repository.create_user({
                 **payload,
                 "passwordHash": get_password_hash(payload["password"]),
@@ -161,14 +161,14 @@ class MasterDataService:
         return await self._run_in_transaction(action)
 
     async def _update_user_db(self, user_id: int, payload: dict) -> dict:
-        if await self.repository.find_user_by_email(payload["email"], exclude_user_id=user_id):
-            raise AppError("Ya existe un usuario con ese correo", error_code="VALIDATION_ERROR", status_code=409)
-
-        role_ids = await self.repository.get_role_ids(payload["roleCodes"])
-        if len(role_ids) != len(payload["roleCodes"]):
-            raise AppError("Uno o más roles no existen", error_code="VALIDATION_ERROR", status_code=400)
-
         async def action() -> dict:
+            if await self.repository.find_user_by_email(payload["email"], exclude_user_id=user_id):
+                raise AppError("Ya existe un usuario con ese correo", error_code="VALIDATION_ERROR", status_code=409)
+
+            role_ids = await self.repository.get_role_ids(payload["roleCodes"])
+            if len(role_ids) != len(payload["roleCodes"]):
+                raise AppError("Uno o más roles no existen", error_code="VALIDATION_ERROR", status_code=400)
+
             updated = await self.repository.update_user(user_id, payload)
             if not updated:
                 raise NotFoundError("Usuario no encontrado")
@@ -207,9 +207,7 @@ class MasterDataService:
     async def _run_user_mutation(self, primary_action: Callable[[], Awaitable[dict]], fallback_action: Callable[[], dict]) -> dict:
         try:
             result = await primary_action()
-        except DBAPIError as exc:
-            if self._dev_mode:
-                return fallback_action()
+        except DBAPIError:
             raise
         if not result:
             raise NotFoundError("Registro no encontrado")

@@ -1,4 +1,5 @@
 // src/components/domain/MasterDataFields.jsx
+import { useMemo } from "react";
 import { ClipboardList } from "lucide-react";
 
 import { useMasterCatalogs } from "../../../hooks/useMasters";
@@ -9,9 +10,64 @@ import { FieldGroup } from "./FieldGroup";
 
 export function MasterDataFields({ form, updateValue }) {
   const catalogsQuery = useMasterCatalogs();
-  const clients = (catalogsQuery.data?.clients || []).map((item) => ({ value: item.Id, label: item.Name }));
-  const operationTypes = (catalogsQuery.data?.operationTypes || []).map((item) => ({ value: item.Id, label: item.Name }));
-  const vehicleTypes = (catalogsQuery.data?.vehicleTypes || []).map((item) => ({ value: item.Id, label: item.Name }));
+  const clients = (catalogsQuery.data?.clients || [])
+    .filter((item) => item.IsActive)
+    .map((item) => ({ value: item.Id, label: item.Name }));
+  const operationTypesById = useMemo(
+    () => new Map((catalogsQuery.data?.operationTypes || []).map((item) => [Number(item.Id), item])),
+    [catalogsQuery.data?.operationTypes],
+  );
+  const vehicleTypesById = useMemo(
+    () => new Map((catalogsQuery.data?.vehicleTypes || []).map((item) => [Number(item.Id), item])),
+    [catalogsQuery.data?.vehicleTypes],
+  );
+  const activeRules = (catalogsQuery.data?.businessRules || []).filter((rule) => rule.IsActive);
+
+  const selectedClientId = Number(form.clientId) || null;
+  const selectedOperationTypeId = Number(form.operationTypeId) || null;
+
+  const operationTypes = useMemo(() => {
+    if (!selectedClientId) return [];
+    const ids = new Set(
+      activeRules
+        .filter((rule) => Number(rule.ClientId) === selectedClientId)
+        .map((rule) => Number(rule.OperationTypeId)),
+    );
+    return [...ids]
+      .map((id) => operationTypesById.get(id))
+      .filter((item) => item?.IsActive)
+      .map((item) => ({ value: item.Id, label: item.Name }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [activeRules, operationTypesById, selectedClientId]);
+
+  const vehicleTypes = useMemo(() => {
+    if (!selectedClientId || !selectedOperationTypeId) return [];
+    const ids = new Set(
+      activeRules
+        .filter(
+          (rule) =>
+            Number(rule.ClientId) === selectedClientId &&
+            Number(rule.OperationTypeId) === selectedOperationTypeId,
+        )
+        .map((rule) => Number(rule.VehicleTypeId)),
+    );
+    return [...ids]
+      .map((id) => vehicleTypesById.get(id))
+      .filter((item) => item?.IsActive)
+      .map((item) => ({ value: item.Id, label: item.Name }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [activeRules, selectedClientId, selectedOperationTypeId, vehicleTypesById]);
+
+  const handleClientChange = (value) => {
+    updateValue("clientId", value);
+    updateValue("operationTypeId", "");
+    updateValue("vehicleTypeId", "");
+  };
+
+  const handleOperationTypeChange = (value) => {
+    updateValue("operationTypeId", value);
+    updateValue("vehicleTypeId", "");
+  };
 
   return (
     <FieldGroup title="Datos de la cita" icon={ClipboardList}>
@@ -19,7 +75,7 @@ export function MasterDataFields({ form, updateValue }) {
         label="Cliente"
         required
         value={form.clientId}
-        onChange={(event) => updateValue("clientId", event.target.value)}
+        onChange={(event) => handleClientChange(event.target.value)}
       >
         <option value="">Seleccione el cliente</option>
         {clients.map((item) => (
@@ -33,9 +89,10 @@ export function MasterDataFields({ form, updateValue }) {
         label="Tipo de operación"
         required
         value={form.operationTypeId}
-        onChange={(event) => updateValue("operationTypeId", event.target.value)}
+        onChange={(event) => handleOperationTypeChange(event.target.value)}
+        disabled={!selectedClientId}
       >
-        <option value="">Seleccione el tipo de operación</option>
+        <option value="">{selectedClientId ? "Seleccione el tipo de operación" : "Primero seleccione cliente"}</option>
         {operationTypes.map((item) => (
           <option key={item.value} value={item.value}>
             {item.label}
@@ -48,8 +105,13 @@ export function MasterDataFields({ form, updateValue }) {
         required
         value={form.vehicleTypeId}
         onChange={(event) => updateValue("vehicleTypeId", event.target.value)}
+        disabled={!selectedClientId || !selectedOperationTypeId}
       >
-        <option value="">Seleccione el tipo de vehículo</option>
+        <option value="">
+          {selectedClientId && selectedOperationTypeId
+            ? "Seleccione el tipo de vehículo"
+            : "Primero seleccione cliente y operación"}
+        </option>
         {vehicleTypes.map((item) => (
           <option key={item.value} value={item.value}>
             {item.label}

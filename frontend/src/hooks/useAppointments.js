@@ -1,30 +1,41 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { appointmentsService } from "../services/appointmentsService";
 
 // ============================================
 // QUERIES
 // ============================================
 
-export function useAppointments(params) {
+export function useAppointments(params, options = {}) {
   return useQuery({
     queryKey: ["appointments", params],
     queryFn: () => appointmentsService.list(params),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
+    ...options,
   });
 }
 
-export function useAppointmentDetail(appointmentId) {
+export function useAppointmentDetail(appointmentId, options = {}) {
   return useQuery({
     queryKey: ["appointment-detail", appointmentId],
     queryFn: () => appointmentsService.detail(appointmentId),
     enabled: Boolean(appointmentId),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    ...options,
   });
 }
 
-export function useAppointmentStatusLog(appointmentId) {
+export function useAppointmentStatusLog(appointmentId, options = {}) {
   return useQuery({
     queryKey: ["appointment-status-log", appointmentId],
     queryFn: () => appointmentsService.statusLog(appointmentId),
     enabled: Boolean(appointmentId),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    ...options,
   });
 }
 
@@ -46,21 +57,20 @@ function useInvalidateQueries() {
   const queryClient = useQueryClient();
 
   const invalidateListAndDashboard = () => {
-    queryClient.invalidateQueries({ queryKey: ["appointments"] });
-    queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
+    queryClient.invalidateQueries({ queryKey: ["appointments"], refetchType: "active" });
+    queryClient.invalidateQueries({ queryKey: ["dashboard-summary"], refetchType: "active" });
   };
 
   const invalidateAppointment = (appointmentId) => {
-    queryClient.invalidateQueries({ queryKey: ["appointment-detail", appointmentId] });
-    queryClient.invalidateQueries({ queryKey: ["appointment-status-log", appointmentId] });
-    queryClient.invalidateQueries({ queryKey: ["appointment-candidates", appointmentId] });
+    queryClient.invalidateQueries({ queryKey: ["appointment-detail", appointmentId], refetchType: "active" });
+    queryClient.invalidateQueries({ queryKey: ["appointment-status-log", appointmentId], refetchType: "active" });
+    queryClient.invalidateQueries({ queryKey: ["appointment-candidates", appointmentId], refetchType: "active" });
   };
 
   return { invalidateListAndDashboard, invalidateAppointment };
 }
 
 export function useCreateAppointment() {
-  const queryClient = useQueryClient();
   const { invalidateListAndDashboard } = useInvalidateQueries();
 
   return useMutation({
@@ -72,7 +82,6 @@ export function useCreateAppointment() {
 }
 
 export function useUpdateAppointment() {
-  const queryClient = useQueryClient();
   const { invalidateListAndDashboard, invalidateAppointment } = useInvalidateQueries();
 
   return useMutation({
@@ -86,7 +95,6 @@ export function useUpdateAppointment() {
 }
 
 export function useRemoveAppointment() {
-  const queryClient = useQueryClient();
   const { invalidateListAndDashboard } = useInvalidateQueries();
 
   return useMutation({
@@ -98,7 +106,6 @@ export function useRemoveAppointment() {
 }
 
 export function useCheckinAppointment() {
-  const queryClient = useQueryClient();
   const { invalidateListAndDashboard, invalidateAppointment } = useInvalidateQueries();
 
   return useMutation({
@@ -112,7 +119,6 @@ export function useCheckinAppointment() {
 }
 
 export function useAssignAppointment() {
-  const queryClient = useQueryClient();
   const { invalidateListAndDashboard, invalidateAppointment } = useInvalidateQueries();
 
   return useMutation({
@@ -126,7 +132,6 @@ export function useAssignAppointment() {
 }
 
 export function useReassignAppointment() {
-  const queryClient = useQueryClient();
   const { invalidateListAndDashboard, invalidateAppointment } = useInvalidateQueries();
 
   return useMutation({
@@ -140,7 +145,6 @@ export function useReassignAppointment() {
 }
 
 export function useStartProcessAppointment() {
-  const queryClient = useQueryClient();
   const { invalidateListAndDashboard, invalidateAppointment } = useInvalidateQueries();
 
   return useMutation({
@@ -154,7 +158,6 @@ export function useStartProcessAppointment() {
 }
 
 export function useToSignAppointment() {
-  const queryClient = useQueryClient();
   const { invalidateListAndDashboard, invalidateAppointment } = useInvalidateQueries();
 
   return useMutation({
@@ -168,7 +171,6 @@ export function useToSignAppointment() {
 }
 
 export function useFinalizeAppointment() {
-  const queryClient = useQueryClient();
   const { invalidateListAndDashboard, invalidateAppointment } = useInvalidateQueries();
 
   return useMutation({
@@ -182,7 +184,6 @@ export function useFinalizeAppointment() {
 }
 
 export function useCheckoutAppointment() {
-  const queryClient = useQueryClient();
   const { invalidateListAndDashboard, invalidateAppointment } = useInvalidateQueries();
 
   return useMutation({
@@ -196,7 +197,6 @@ export function useCheckoutAppointment() {
 }
 
 export function useCancelAppointment() {
-  const queryClient = useQueryClient();
   const { invalidateListAndDashboard, invalidateAppointment } = useInvalidateQueries();
 
   return useMutation({
@@ -222,7 +222,7 @@ export function useAppointmentActions() {
   const checkout = useCheckoutAppointment();
   const cancel = useCancelAppointment();
 
-  return {
+  return useMemo(() => ({
     create,
     update,
     remove,
@@ -234,5 +234,5 @@ export function useAppointmentActions() {
     finalize,
     checkout,
     cancel,
-  };
+  }), [create, update, remove, checkin, assign, reassign, startProcess, toSign, finalize, checkout, cancel]);
 }

@@ -42,6 +42,15 @@ BEGIN
             THROW 50010, 'VALIDATION_ERROR|INVALID_CONFIGURATION', 1;
         IF NOT EXISTS (SELECT 1 FROM dbo.tbl_VehicleType WHERE Id = @VehicleTypeId AND IsActive = 1)
             THROW 50011, 'VALIDATION_ERROR|INVALID_CONFIGURATION', 1;
+        IF NOT EXISTS (
+            SELECT 1
+            FROM dbo.tbl_BusinessRule
+            WHERE ClientId = @ClientId
+              AND OperationTypeId = @OperationTypeId
+              AND VehicleTypeId = @VehicleTypeId
+              AND IsActive = 1
+        )
+            THROW 50013, 'VALIDATION_ERROR|INVALID_CONFIGURATION', 1;
 
         IF @currentClientId = @ClientId
            AND @currentOperationTypeId = @OperationTypeId

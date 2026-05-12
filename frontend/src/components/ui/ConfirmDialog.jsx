@@ -34,10 +34,11 @@ export function ConfirmDialog({
       closeOnOverlayClick={closeOnOverlayClick}
       closeOnEsc={closeOnEsc}
     >
-      <div className="py-2">
-        <p className="text-sm text-neutral-600">{description}</p>
+      <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 shadow-sm shadow-neutral-900/5">
+        <p className="text-sm leading-6 text-neutral-600">{description}</p>
       </div>
-      <ModalFooter className="gap-3">
+
+      <ModalFooter className="mt-4 gap-2.5 border-t border-neutral-200 pt-4">
         <Button
           ref={cancelButtonRef}
           variant="secondary"
@@ -45,6 +46,7 @@ export function ConfirmDialog({
         >
           {cancelText}
         </Button>
+
         <Button
           ref={confirmButtonRef}
           variant={confirmVariant}

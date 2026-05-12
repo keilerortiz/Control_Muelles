@@ -68,13 +68,13 @@ export function Sidebar({ isOpen = false, onClose }) {
 
       {/* Footer versión */}
       <div className={`border-t border-neutral-200 text-center text-xs text-neutral-400 ${!collapsed ? "p-3" : "py-3"}`}>
-        {!collapsed ? "v1.0.0" : "v1"}
+        {!collapsed ? "Excelencia Operacional" : "EO"}
       </div>
     </>
   );
 
   const baseClasses = `
-    flex h-full flex-col border-r border-neutral-200 bg-white/90 backdrop-blur-sm transition-all duration-300
+    flex h-full flex-col border-r border-neutral-200 bg-white transition-all duration-300
     ${collapsed ? "w-16" : "w-64"}
   `;
 

@@ -9,8 +9,7 @@ from app.services.appointment_dev_store import DEV_APPOINTMENTS_STORE
 class AppointmentServiceReadsMixin:
     async def dashboard_summary(self, date_from=None, date_to=None) -> dict:
         try:
-            items = await self.repository.get_operational_snapshot(date_from=date_from, date_to=date_to)
-            return self._build_dashboard_summary(items)
+            return await self.repository.get_dashboard_summary(date_from=date_from, date_to=date_to)
         except DBAPIError as exc:
             if self._dev_mode and self._is_db_unavailable(exc):
                 return DEV_APPOINTMENTS_STORE.dashboard_summary(date_from=date_from, date_to=date_to)
@@ -26,15 +25,9 @@ class AppointmentServiceReadsMixin:
         date_to=None,
     ) -> dict:
         try:
-            items = await self.repository.list_appointments(
+            items, total = await self.repository.list_appointments_page(
                 skip=skip,
                 take=take,
-                search=search,
-                status=status,
-                date_from=date_from,
-                date_to=date_to,
-            )
-            total = await self.repository.count_appointments(
                 search=search,
                 status=status,
                 date_from=date_from,

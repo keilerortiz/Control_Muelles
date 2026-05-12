@@ -59,10 +59,10 @@ class AppointmentRepositoryCommandsMixin:
     async def reassign(self, appointment_id: int, dock_id: int, operator_ids: list[int], candidates_version: int, user_id: int, correlation_id: str) -> None:
         await self._execute_resource_command("dbo.usp_ReassignAppointmentResource", appointment_id, dock_id, operator_ids, candidates_version, user_id, correlation_id)
 
-    async def start_process(self, appointment_id: int, document_delivery_at: datetime, process_start_at: datetime, user_id: int, correlation_id: str) -> None:
+    async def start_process(self, appointment_id: int, document_delivery_at: datetime, process_start_at: datetime, remissions: str, precincts: str, user_id: int, correlation_id: str) -> None:
         await self.session.execute(
-            text("EXEC dbo.usp_StartAppointmentProcess :appointment_id, :document_delivery_at, :process_start_at, :changed_by, :correlation_id"),
-            {"appointment_id": appointment_id, "document_delivery_at": document_delivery_at, "process_start_at": process_start_at, "changed_by": user_id, "correlation_id": correlation_id},
+            text("EXEC dbo.usp_StartAppointmentProcess :appointment_id, :document_delivery_at, :process_start_at, :remissions, :precincts, :changed_by, :correlation_id"),
+            {"appointment_id": appointment_id, "document_delivery_at": document_delivery_at, "process_start_at": process_start_at, "remissions": remissions, "precincts": precincts, "changed_by": user_id, "correlation_id": correlation_id},
         )
 
     async def to_sign(self, appointment_id: int, process_end_at: datetime, user_id: int, correlation_id: str) -> None:

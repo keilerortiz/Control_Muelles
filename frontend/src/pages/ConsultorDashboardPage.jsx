@@ -1,5 +1,5 @@
 import { Activity, Gauge, OctagonAlert, PackageCheck } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { AppointmentDetailPanel } from "../components/domain/AppointmentDetailPanel";
 import { AppointmentsTable } from "../components/domain/AppointmentsTable";
@@ -11,6 +11,9 @@ import { useDashboard } from "../hooks/useDashboard";
 import { useAuthStore } from "../store/authStore";
 import { useDateRangeStore } from "../store/dateRangeStore";
 import { getDateRangeParams } from "../utils/dateRange";
+
+const REFRESH_INTERVAL_MS = 3 * 60 * 1000;
+const PAGE_SIZE = 10;
 
 function buildConsultorMetrics(rows = []) {
   const totalVolume = rows.reduce(
@@ -66,14 +69,24 @@ function buildConsultorMetrics(rows = []) {
 
 export function ConsultorDashboardPage() {
   const [selectedAppointmentId, setSelectedAppointmentId] = useState(null);
+  const [page, setPage] = useState(1);
   const roles = useAuthStore((state) => state.user?.roles || []);
   const range = useDateRangeStore((state) => state.range);
   const dateRangeParams = useMemo(() => getDateRangeParams(range), [range]);
 
-  const summaryQuery = useDashboard(dateRangeParams);
-  const appointmentsQuery = useAppointments({ skip: 0, take: 25, ...dateRangeParams });
-  const detailQuery = useAppointmentDetail(selectedAppointmentId);
-  const statusLogQuery = useAppointmentStatusLog(selectedAppointmentId);
+  const summaryQuery = useDashboard(dateRangeParams, { refetchIntervalMs: REFRESH_INTERVAL_MS });
+  const appointmentsQuery = useAppointments(
+    { skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE, ...dateRangeParams },
+    { refetchInterval: REFRESH_INTERVAL_MS, refetchIntervalInBackground: false },
+  );
+  const detailQuery = useAppointmentDetail(selectedAppointmentId, {
+    refetchInterval: REFRESH_INTERVAL_MS,
+    refetchIntervalInBackground: false,
+  });
+  const statusLogQuery = useAppointmentStatusLog(selectedAppointmentId, {
+    refetchInterval: REFRESH_INTERVAL_MS,
+    refetchIntervalInBackground: false,
+  });
 
   useEffect(() => {
     const firstAppointmentId = appointmentsQuery.data?.items?.[0]?.Id;
@@ -82,14 +95,22 @@ export function ConsultorDashboardPage() {
     }
   }, [appointmentsQuery.data?.items, selectedAppointmentId]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [dateRangeParams.date_from, dateRangeParams.date_to]);
+
   const appointments = appointmentsQuery.data?.items || [];
+  const totalAppointments = appointmentsQuery.data?.total || 0;
   const selectedAppointment =
     detailQuery.data || appointments.find((row) => row.Id === selectedAppointmentId) || null;
   const metrics = useMemo(() => buildConsultorMetrics(appointments), [appointments]);
+  const selectAppointment = useCallback((appointment) => {
+    setSelectedAppointmentId(appointment.Id);
+  }, []);
 
   if (summaryQuery.isLoading || appointmentsQuery.isLoading) {
     return (
-      <div className="space-y-3 px-4 sm:px-6 lg:px-8">
+      <div className="space-y-3 px-2 sm:px-3 lg:px-4">
         <Skeleton className="h-28" />
         <Skeleton className="h-96" />
       </div>
@@ -108,7 +129,7 @@ export function ConsultorDashboardPage() {
   ];
 
   return (
-    <div className="space-y-4 px-4 sm:px-6 lg:px-8">
+    <div className="space-y-4 px-2 sm:px-3 lg:px-4">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => {
           const Icon = card.Icon;
@@ -124,13 +145,17 @@ export function ConsultorDashboardPage() {
         })}
       </div>
 
-      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[1.4fr_1fr]">
+      <div className="flex flex-col gap-4 xl:hidden">
         <div className="min-w-0">
           <Card title="Citas del rango seleccionado">
             <AppointmentsTable
               rows={appointments}
               selectedAppointmentId={selectedAppointmentId}
-              onSelect={(appointment) => setSelectedAppointmentId(appointment.Id)}
+              onSelect={selectAppointment}
+              page={page}
+              pageSize={PAGE_SIZE}
+              total={totalAppointments}
+              onPageChange={setPage}
             />
           </Card>
         </div>
@@ -143,6 +168,45 @@ export function ConsultorDashboardPage() {
             onAction={() => {}}
           />
         </div>
+      </div>
+
+      <div className="hidden xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(320px,0.9fr)] xl:gap-4">
+        <div className="col-span-2 min-w-0">
+          <Card title="Citas del rango seleccionado">
+            <AppointmentsTable
+              rows={appointments}
+              selectedAppointmentId={selectedAppointmentId}
+              onSelect={selectAppointment}
+              page={page}
+              pageSize={PAGE_SIZE}
+              total={totalAppointments}
+              onPageChange={setPage}
+            />
+          </Card>
+        </div>
+
+        <div className="row-span-2 min-w-0">
+          <AppointmentDetailPanel
+            appointment={selectedAppointment}
+            statusLog={statusLogQuery.data || []}
+            roles={roles}
+            onAction={() => {}}
+          />
+        </div>
+
+        <Card title="Cumple cita">
+          <p className="text-3xl font-semibold text-neutral-900">
+            {summaryQuery.data?.kpis?.cumpleCitaRate ?? 0}%
+          </p>
+          <p className="mt-1 text-sm text-neutral-500">Llegadas dentro de objetivo</p>
+        </Card>
+
+        <Card title="OTS">
+          <p className="text-3xl font-semibold text-neutral-900">
+            {summaryQuery.data?.kpis?.otsRate ?? 0}%
+          </p>
+          <p className="mt-1 text-sm text-neutral-500">Operaciones dentro del estándar</p>
+        </Card>
       </div>
     </div>
   );

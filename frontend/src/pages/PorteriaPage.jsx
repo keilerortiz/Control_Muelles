@@ -1,5 +1,5 @@
 import { Clock3, LogIn, LogOut, Truck } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { AppointmentActionModal } from "../components/domain/AppointmentActionModal";
 import { Card } from "../components/ui/Card";
@@ -15,13 +15,13 @@ import { getDateRangeParams } from "../utils/dateRange";
 
 function PorteriaList({ title, rows, actionKey, onAction }) {
   return (
-    <Card title={title}>
-      <div className="space-y-3">
+    <Card title={title} className="flex h-full min-h-0 flex-col" contentClassName="flex-1 min-h-0">
+      <div className="h-full space-y-3 overflow-y-auto pr-1">
         {rows.length === 0 ? (
-          <EmptyState title="Sin vehículos" description="No hay registros para este rango de fechas." />
+          <EmptyState title="Sin vehículos"/>
         ) : (
           rows.map((row) => {
-            const isActionAvailable = getAvailableActions(row.Status, ["PORTERIA", "ADMIN"]).some(
+            const isActionAvailable = getAvailableActions(row.Status, ["PORTERIA"]).some(
               (action) => action.key === actionKey,
             );
 
@@ -34,10 +34,12 @@ function PorteriaList({ title, rows, actionKey, onAction }) {
                       <Badge status={row.Status} />
                     </div>
                     <div className="grid gap-1 text-sm text-neutral-600">
+                      <p><span className="font-bold">Hora de cita:</span> {formatDateTime(row.ScheduledAt)}</p>
                       <p><span className="font-medium">Cliente:</span> {row.ClientName || "-"}</p>
+                      <p><span className="font-medium">Nombre conductor:</span> {row.DriverName || "-"}</p>
+                      <p><span className="font-medium">Cédula conductor:</span> {row.DriverDocument || "-"}</p>
                       <p><span className="font-medium">Placa:</span> {row.VehiclePlate || "-"}</p>
-                      <p><span className="font-medium">Programada:</span> {formatDateTime(row.ScheduledAt)}</p>
-                      <p><span className="font-medium">Muelle:</span> {row.DockName || "Pendiente"}</p>
+                      <p><span className="font-medium">Observaciones:</span> {row.NonComplianceComment || row.Observations || "-"}</p>
                     </div>
                   </div>
 
@@ -51,7 +53,7 @@ function PorteriaList({ title, rows, actionKey, onAction }) {
                     {isActionAvailable
                       ? actionLabels[actionKey]
                       : actionKey === "checkout"
-                      ? "Esperando finalización"
+                      ? "Salida no disponible"
                       : "No disponible"}
                   </Button>
                 </div>
@@ -74,29 +76,43 @@ export function PorteriaPage() {
   const [actionError, setActionError] = useState("");
 
   const rows = appointmentsQuery.data?.items || [];
-  const scheduledRows = rows.filter((row) => row.Status === "AGENDADA" && !row.ArrivalAt);
-  const inYardRows = rows.filter(
-    (row) => row.ArrivalAt && !row.CheckoutAt && row.Status !== "ATENDIDA" && row.Status !== "OPERACION_CANCELADA",
+  const scheduledRows = useMemo(
+    () => rows.filter((row) => row.Status === "AGENDADA" && !row.ArrivalAt),
+    [rows],
+  );
+  const inYardRows = useMemo(
+    () =>
+      rows.filter(
+        (row) =>
+          row.ArrivalAt &&
+          !row.CheckoutAt &&
+          row.Status !== "ATENDIDA" &&
+          row.Status !== "OPERACION_CANCELADA",
+      ),
+    [rows],
   );
 
-  const pendingMap = {
-    checkin: actions.checkin.isPending,
-    checkout: actions.checkout.isPending,
-  };
+  const pendingMap = useMemo(
+    () => ({
+      checkin: actions.checkin.isPending,
+      checkout: actions.checkout.isPending,
+    }),
+    [actions.checkin.isPending, actions.checkout.isPending],
+  );
 
-  const handleActionOpen = (actionKey, appointment) => {
+  const handleActionOpen = useCallback((actionKey, appointment) => {
     setActionError("");
     setSelectedAppointment(appointment);
     setActiveAction(actionKey);
-  };
+  }, []);
 
-  const handleActionClose = () => {
+  const handleActionClose = useCallback(() => {
     setActionError("");
     setSelectedAppointment(null);
     setActiveAction(null);
-  };
+  }, []);
 
-  const handleActionSubmit = async (payload) => {
+  const handleActionSubmit = useCallback(async (payload) => {
     if (!selectedAppointment || !activeAction) {
       return;
     }
@@ -114,7 +130,7 @@ export function PorteriaPage() {
     } catch (error) {
       setActionError(getErrorMessage(error));
     }
-  };
+  }, [actions.checkin, actions.checkout, activeAction, handleActionClose, selectedAppointment]);
 
   if (appointmentsQuery.isLoading && !appointmentsQuery.data) {
     return (
@@ -129,8 +145,8 @@ export function PorteriaPage() {
   }
 
   return (
-    <div className="space-y-4 px-4 sm:px-6 lg:px-8">
-      <div className="grid gap-4 md:grid-cols-3">
+    <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden px-2 sm:px-3 lg:px-4">
+      <div className="grid gap-4 md:grid-cols-2">
         <Card title="Pendientes de ingreso">
           <div className="flex items-center justify-between">
             <Truck className="h-7 w-7 text-neutral-500" strokeWidth={1.75} />
@@ -143,16 +159,11 @@ export function PorteriaPage() {
             <p className="text-2xl font-bold text-neutral-800">{inYardRows.length}</p>
           </div>
         </Card>
-        <Card title="Rango activo">
-          <div className="text-sm text-neutral-600">
-            La portería usa el mismo filtro global del Topbar para cambiar de día o revisar ventanas anteriores.
-          </div>
-        </Card>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <PorteriaList title="Agendados sin check-in" rows={scheduledRows} actionKey="checkin" onAction={handleActionOpen} />
-        <PorteriaList title="Vehículos aún en patio" rows={inYardRows} actionKey="checkout" onAction={handleActionOpen} />
+      <div className="grid min-h-0 flex-1 grid-rows-2 gap-4 xl:grid-cols-2 xl:grid-rows-1">
+        <PorteriaList title="Citas agendadas" rows={scheduledRows} actionKey="checkin" onAction={handleActionOpen} />
+        <PorteriaList title="Vehículos en patio" rows={inYardRows} actionKey="checkout" onAction={handleActionOpen} />
       </div>
 
       <AppointmentActionModal

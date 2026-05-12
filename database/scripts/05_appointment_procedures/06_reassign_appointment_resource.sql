@@ -12,18 +12,12 @@ BEGIN
     BEGIN TRY
         BEGIN TRANSACTION;
 
-        EXEC dbo.usp_ValidateCandidatesVersion @CandidatesVersion;
-
         DECLARE
             @currentStatus NVARCHAR(50),
-            @operationTypeId INT,
-            @vehicleTypeId INT,
             @currentDockId INT;
 
         SELECT
             @currentStatus = Status,
-            @operationTypeId = OperationTypeId,
-            @vehicleTypeId = VehicleTypeId,
             @currentDockId = DockId
         FROM dbo.tbl_Appointment
         WHERE Id = @AppointmentId AND IsDeleted = 0;
@@ -31,19 +25,11 @@ BEGIN
         IF @currentStatus IS NULL THROW 50026, 'RESOURCE_NOT_FOUND', 1;
         IF @currentStatus <> 'EN_PROCESO' THROW 50027, 'INVALID_STATE_TRANSITION', 1;
 
-        IF NOT EXISTS (
-            SELECT 1
-            FROM dbo.tbl_DockCapability dc
-            WHERE dc.DockId = @DockId
-              AND dc.OperationTypeId = @operationTypeId
-              AND dc.VehicleTypeId = @vehicleTypeId
-        ) THROW 50028, 'DOCK_BUSY', 1;
-
         IF EXISTS (
             SELECT 1
             FROM dbo.tbl_Appointment a
             WHERE a.DockId = @DockId
-              AND a.Status IN ('EN_PATIO','ENTREGA_DOCUMENTOS','EN_PROCESO')
+              AND a.Status IN ('ENTREGA_DOCUMENTOS','EN_PROCESO')
               AND a.Id <> @AppointmentId
               AND a.IsDeleted = 0
         ) THROW 50029, 'DOCK_BUSY', 1;

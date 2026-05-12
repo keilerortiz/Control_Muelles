@@ -67,6 +67,8 @@ def test_reassign_stays_in_en_proceso():
         1,
         datetime.now(UTC) - timedelta(minutes=10),
         datetime.now(UTC) - timedelta(minutes=5),
+        "REM-001",
+        "PREC-001",
         9,
     )
 
@@ -94,6 +96,8 @@ def test_start_process_requires_document_delivery_before_process_start():
             1,
             datetime.now(UTC),
             datetime.now(UTC) - timedelta(minutes=1),
+            "REM-001",
+            "PREC-001",
             9,
         )
 

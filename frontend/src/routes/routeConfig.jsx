@@ -1,10 +1,25 @@
+import { lazy } from "react";
+
 import App from "../App";
-import { AdminMastersPage } from "../pages/AdminMastersPage";
-import { ConsultorDashboardPage } from "../pages/ConsultorDashboardPage";
-import { LoginPage } from "../pages/LoginPage";
-import { AppointmentsPage } from "../pages/AppointmentsPage";
-import { PorteriaPage } from "../pages/PorteriaPage";
-import { SupervisorPage } from "../pages/SupervisorPage";
+
+const AdminMastersPage = lazy(() =>
+  import("../pages/AdminMastersPage").then((module) => ({ default: module.AdminMastersPage })),
+);
+const ConsultorDashboardPage = lazy(() =>
+  import("../pages/ConsultorDashboardPage").then((module) => ({ default: module.ConsultorDashboardPage })),
+);
+const LoginPage = lazy(() =>
+  import("../pages/LoginPage").then((module) => ({ default: module.LoginPage })),
+);
+const AppointmentsPage = lazy(() =>
+  import("../pages/AppointmentsPage").then((module) => ({ default: module.AppointmentsPage })),
+);
+const PorteriaPage = lazy(() =>
+  import("../pages/PorteriaPage").then((module) => ({ default: module.PorteriaPage })),
+);
+const SupervisorPage = lazy(() =>
+  import("../pages/SupervisorPage").then((module) => ({ default: module.SupervisorPage })),
+);
 
 export const routeConfig = {
   public: [{ path: "/login", element: <LoginPage /> }],

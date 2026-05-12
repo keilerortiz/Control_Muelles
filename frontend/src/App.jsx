@@ -15,12 +15,12 @@ export default function App() {
   }, [location.pathname]);
 
   return (
-    <div className="h-screen overflow-hidden bg-gradient-to-br from-neutral-100 via-brand-50 to-neutral-200">
+    <div className="h-screen overflow-hidden bg-neutral-100">
       <div className="flex h-full">
         <Sidebar isOpen={isSidebarOpen} onClose={closeSidebar} />
         <div className="flex flex-1 flex-col h-full overflow-hidden">
           <Topbar onMenuClick={toggleSidebar} />
-          <main className="flex-1 overflow-y-auto p-4 md:p-6">
+          <main className="flex-1 overflow-hidden p-2 md:p-2.5">
             <Outlet />
           </main>
         </div>

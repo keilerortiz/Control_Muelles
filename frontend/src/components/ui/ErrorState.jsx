@@ -13,22 +13,37 @@ export function ErrorState({
 }) {
   // Ícono por defecto
   const DefaultIcon = () => (
-    <AlertCircle className="mx-auto h-12 w-12 text-error-500" strokeWidth={1.5} />
+    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-error-200 bg-error-50 shadow-sm shadow-neutral-900/5">
+      <AlertCircle
+        className="h-7 w-7 text-error-500"
+        strokeWidth={1.75}
+      />
+    </div>
   );
 
   const containerClasses = {
-    default: "rounded-lg border border-error-200 bg-error-50 p-6 text-center",
-    card: "rounded-xl border border-neutral-200 bg-white p-8 text-center shadow-sm",
-    minimal: "p-4 text-center",
+    default:
+      "rounded-2xl border border-error-200 bg-error-50 p-5 text-center shadow-sm shadow-neutral-900/5",
+    card:
+      "rounded-2xl border border-neutral-200 bg-white p-6 text-center shadow-md shadow-neutral-900/10",
+    minimal:
+      "rounded-2xl p-4 text-center",
   };
 
   return (
     <div className={`${containerClasses[variant]} ${className}`}>
       {icon ? icon : <DefaultIcon />}
-      <h3 className="mt-4 text-base font-semibold text-neutral-800">{title}</h3>
-      <p className="mt-2 text-sm text-neutral-600">{message}</p>
+
+      <h3 className="mt-4 text-base font-semibold tracking-[-0.01em] text-neutral-900">
+        {title}
+      </h3>
+
+      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-neutral-600">
+        {message}
+      </p>
+
       {onRetry && (
-        <div className="mt-4">
+        <div className="mt-5">
           <Button onClick={onRetry} variant="outline" size="sm">
             {retryText}
           </Button>

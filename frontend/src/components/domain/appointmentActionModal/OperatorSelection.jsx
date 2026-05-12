@@ -1,36 +1,73 @@
-// src/components/ui/OperatorSelection.jsx
+import { useMemo, useState } from "react";
+import { Check, ChevronDown, Search } from "lucide-react";
+import { Dropdown } from "../../ui/Dropdown";
+
 export function OperatorSelection({ checkedIds, operators, title, toggleOperator }) {
+  const [search, setSearch] = useState("");
+
+  const filteredOperators = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return operators;
+    return operators.filter((operator) => operator.Name?.toLowerCase().includes(term));
+  }, [operators, search]);
+
   return (
     <div className="space-y-2">
       <p className="text-sm font-medium text-slate-700">{title}</p>
-      <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-2">
-        {operators.length === 0 ? (
-          <p className="text-sm text-slate-500">Sin candidatos disponibles.</p>
-        ) : (
-          operators.map((operator) => {
-            const checked = checkedIds.includes(operator.Id);
-            return (
-              <label
-                key={operator.Id}
-                className="flex cursor-pointer items-start gap-3 rounded-md p-1 text-sm text-slate-700 transition-colors duration-150 hover:bg-slate-50"
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => toggleOperator(operator.Id)}
-                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-2 focus:ring-brand-500 focus:ring-offset-0"
-                />
-                <span>
-                  {operator.Name}
-                  <span className="block text-xs text-slate-500">
-                    Activas: {operator.ActiveAssignments} / Máximo: {operator.MaxConcurrentOperations}
-                  </span>
-                </span>
-              </label>
-            );
-          })
+      <Dropdown
+        className="w-[360px] max-w-[calc(100vw-48px)] p-2"
+        trigger={(
+          <button
+            type="button"
+            className="flex h-9 w-full items-center justify-between rounded-xl border border-neutral-300 bg-white px-3 text-sm text-neutral-800 shadow-sm hover:border-neutral-400"
+          >
+            <span className="truncate text-left">
+              {checkedIds.length > 0 ? `${checkedIds.length} seleccionados` : `Seleccionar ${title.toLowerCase()}`}
+            </span>
+            <ChevronDown className="h-4 w-4 text-neutral-500" />
+          </button>
         )}
-      </div>
+      >
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 rounded-lg border border-neutral-200 px-2 py-1.5">
+            <Search className="h-4 w-4 text-neutral-400" />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar operario..."
+              className="w-full border-0 bg-transparent text-sm text-neutral-700 outline-none"
+            />
+          </div>
+
+          <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
+            {filteredOperators.length === 0 ? (
+              <p className="px-2 py-2 text-sm text-slate-500">Sin candidatos disponibles.</p>
+            ) : (
+              filteredOperators.map((operator) => {
+                const checked = checkedIds.includes(operator.Id);
+                return (
+                  <button
+                    key={operator.Id}
+                    type="button"
+                    onClick={() => toggleOperator(operator.Id)}
+                    className="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    <span className={`mt-0.5 inline-flex h-4 w-4 items-center justify-center rounded border ${checked ? "border-brand-500 bg-brand-500 text-white" : "border-slate-300 bg-white text-transparent"}`}>
+                      <Check className="h-3 w-3" />
+                    </span>
+                    <span>
+                      {operator.Name}
+                      <span className="block text-xs text-slate-500">
+                        Activas: {operator.ActiveAssignments} / Máximo: {operator.MaxConcurrentOperations}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </Dropdown>
     </div>
   );
 }

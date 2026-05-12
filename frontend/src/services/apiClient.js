@@ -1,5 +1,6 @@
 import axios from "axios";
 
+import { realtimeClientId } from "./realtimeClientId";
 import { useAuthStore } from "../store/authStore";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
@@ -13,8 +14,9 @@ let refreshPromise = null;
 
 apiClient.interceptors.request.use((config) => {
   const accessToken = useAuthStore.getState().accessToken;
+  config.headers = config.headers || {};
+  config.headers["X-Client-ID"] = realtimeClientId;
   if (accessToken) {
-    config.headers = config.headers || {};
     config.headers.Authorization = `Bearer ${accessToken}`;
   }
   return config;

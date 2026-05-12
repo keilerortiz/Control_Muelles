@@ -1,6 +1,10 @@
+import asyncio
 import json
+import logging
 
 from fastapi import WebSocket
+
+logger = logging.getLogger(__name__)
 
 
 class ConnectionManager:
@@ -18,12 +22,25 @@ class ConnectionManager:
         if not self.connections:
             return
         message = json.dumps({"channel": channel, "payload": payload}, default=str)
-        dead: list[WebSocket] = []
-        for connection in self.connections:
+
+        async def send(connection: WebSocket) -> WebSocket | None:
             try:
-                await connection.send_text(message)
+                await asyncio.wait_for(connection.send_text(message), timeout=5)
+                return None
             except Exception:
-                dead.append(connection)
+                return connection
+
+        results = await asyncio.gather(
+            *(send(connection) for connection in list(self.connections)),
+            return_exceptions=True,
+        )
+        dead: list[WebSocket] = []
+        for result in results:
+            if isinstance(result, Exception):
+                logger.warning("Error sending WebSocket message: %s", result)
+                continue
+            if result is not None:
+                dead.append(result)
         for connection in dead:
             self.disconnect(connection)
 

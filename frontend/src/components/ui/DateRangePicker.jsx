@@ -13,10 +13,13 @@ const presets = [
   { key: "thisMonth", label: "Este mes" },
 ];
 
-export function DateRangePicker() {
+export function DateRangePicker({ compact = false }) {
   const { range, setPreset, setCustomRange, resetToToday } = useDateRangeStore();
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState({ startDate: range.startDate, endDate: range.endDate });
+  const [draft, setDraft] = useState({
+    startDate: range.startDate,
+    endDate: range.endDate,
+  });
   const containerRef = useRef(null);
 
   useEffect(() => {
@@ -46,61 +49,116 @@ export function DateRangePicker() {
       <Button
         type="button"
         variant="secondary"
-        className="min-w-[180px] justify-between"
+        className={
+          compact
+            ? "h-9 px-2.5"
+            : "h-9 min-w-[190px] justify-between px-3.5"
+        }
         leftIcon={<CalendarDays className="h-4 w-4" strokeWidth={1.75} />}
-        rightIcon={<ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} strokeWidth={1.75} />}
+        rightIcon={
+          compact ? null : (
+            <ChevronDown
+              className={`h-4 w-4 transition-transform duration-200 ${
+                open ? "rotate-180" : ""
+              }`}
+              strokeWidth={1.75}
+            />
+          )
+        }
         onClick={() => setOpen((current) => !current)}
+        aria-label="Rango de fechas"
+        title="Rango de fechas"
       >
-        {label}
+        {compact ? null : label}
       </Button>
 
       {open && (
-        <div className="absolute right-0 top-full z-30 mt-2 w-[320px] rounded-xl border border-neutral-200 bg-white p-4 shadow-xl">
-          <div className="grid grid-cols-2 gap-2">
-            {presets.map((preset) => (
+        <div
+          className={`overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xl shadow-neutral-900/10 ${
+            compact
+              ? "fixed left-2 right-2 top-16 z-50"
+              : "absolute right-0 top-full z-30 mt-2 w-[min(340px,calc(100vw-1rem))]"
+          }`}
+        >
+          <div className="border-b border-neutral-200 bg-neutral-50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">
+              Rango de fechas
+            </p>
+            <p className="mt-1 text-sm font-semibold text-neutral-900">
+              {label}
+            </p>
+          </div>
+
+          <div className="p-4">
+            <div className="grid grid-cols-2 gap-2">
+              {presets.map((preset) => (
+                <Button
+                  key={preset.key}
+                  type="button"
+                  variant={range.preset === preset.key ? "primary" : "secondary"}
+                  size="sm"
+                  className="w-full"
+                  onClick={() => {
+                    setPreset(preset.key);
+                    setOpen(false);
+                  }}
+                >
+                  {preset.label}
+                </Button>
+              ))}
+            </div>
+
+            <div className="mt-4 grid gap-3 rounded-xl border border-neutral-200 bg-neutral-50 p-3">
+              <Input
+                label="Desde"
+                type="date"
+                value={draft.startDate}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    startDate: event.target.value,
+                  }))
+                }
+              />
+
+              <Input
+                label="Hasta"
+                type="date"
+                value={draft.endDate}
+                min={draft.startDate}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    endDate: event.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="mt-4 flex items-center justify-between gap-2 border-t border-neutral-200 pt-4">
               <Button
-                key={preset.key}
                 type="button"
-                variant={range.preset === preset.key ? "primary" : "secondary"}
+                variant="ghost"
                 size="sm"
-                className="w-full"
-                onClick={() => {
-                  setPreset(preset.key);
-                  setOpen(false);
-                }}
+                onClick={resetToToday}
               >
-                {preset.label}
+                Restablecer
               </Button>
-            ))}
-          </div>
 
-          <div className="mt-4 grid gap-3">
-            <Input
-              label="Desde"
-              type="date"
-              value={draft.startDate}
-              onChange={(event) => setDraft((current) => ({ ...current, startDate: event.target.value }))}
-            />
-            <Input
-              label="Hasta"
-              type="date"
-              value={draft.endDate}
-              min={draft.startDate}
-              onChange={(event) => setDraft((current) => ({ ...current, endDate: event.target.value }))}
-            />
-          </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setOpen(false)}
+                >
+                  Cerrar
+                </Button>
 
-          <div className="mt-4 flex items-center justify-between gap-2">
-            <Button type="button" variant="ghost" size="sm" onClick={resetToToday}>
-              Restablecer
-            </Button>
-            <div className="flex items-center gap-2">
-              <Button type="button" variant="secondary" size="sm" onClick={() => setOpen(false)}>
-                Cerrar
-              </Button>
-              <Button type="button" size="sm" onClick={applyCustomRange}>
-                Aplicar
-              </Button>
+                <Button type="button" size="sm" onClick={applyCustomRange}>
+                  Aplicar
+                </Button>
+              </div>
             </div>
           </div>
         </div>

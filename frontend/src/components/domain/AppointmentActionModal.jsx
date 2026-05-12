@@ -1,5 +1,5 @@
 // src/components/appointments/AppointmentActionModal.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { actionLabels, formatDateTime } from "../../domain/appointmentsConfig";
 import { Button } from "../ui/Button";
 import { Modal, ModalFooter } from "../ui/Modal";
@@ -44,11 +44,11 @@ export function AppointmentActionModal({
   const title = actionLabels[action] || "Acción";
   const [validationError, setValidationError] = useState("");
 
-  const updateValue = (key, value) => {
+  const updateValue = useCallback((key, value) => {
     setForm((current) => ({ ...current, [key]: value }));
-  };
+  }, []);
 
-  const toggleOperator = (key, operatorId) => {
+  const toggleOperator = useCallback((key, operatorId) => {
     setForm((current) => {
       const currentValues = current[key];
       const exists = currentValues.includes(operatorId);
@@ -56,10 +56,10 @@ export function AppointmentActionModal({
         ...current,
         [key]: exists
           ? currentValues.filter((value) => value !== operatorId)
-          : [...currentValues, operatorId],
+        : [...currentValues, operatorId],
       };
     });
-  };
+  }, []);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -74,6 +74,12 @@ export function AppointmentActionModal({
       }
       if (!scheduledAt || scheduledAt <= now) {
         setValidationError("La fecha y hora programada debe ser mayor a la actual.");
+        return;
+      }
+    }
+    if (action === "startProcess") {
+      if (!form.remissions?.trim() || !form.precincts?.trim()) {
+        setValidationError("Completa remisión y precintos para iniciar proceso.");
         return;
       }
     }
@@ -92,9 +98,9 @@ export function AppointmentActionModal({
       <form className="space-y-4" onSubmit={handleSubmit}>
         {appointment && (
           <div className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-600">
-            Estado actual: <strong>{appointment.Status}</strong>
+              <span className="font-bold">Cliente:</span> {appointment.ClientName || "-"}
             <span className="ml-3">
-              Programada: {formatDateTime(appointment.ScheduledAt)}
+               <span className="font-bold">Programada:</span> {formatDateTime(appointment.ScheduledAt)}
             </span>
           </div>
         )}

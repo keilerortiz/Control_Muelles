@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Bell, ChevronDown, LogOut, Menu } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { ChevronDown, LogOut, Menu, RotateCw } from "lucide-react";
 import { useRealtime } from "../../hooks/useRealtime";
 import { useAuthStore } from "../../store/authStore";
 import { getRouteLabel } from "../../domain/roleNavigation";
@@ -11,9 +12,11 @@ import iceStarSmallLogo from "../icons/icon-icestar.png";
 export function Topbar({ onMenuClick }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const { syncState } = useRealtime();
   const { user, clearSession } = useAuthStore();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -31,11 +34,21 @@ export function Topbar({ onMenuClick }) {
     navigate("/login");
   };
 
+  const handleRefresh = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await queryClient.refetchQueries({ type: "active" });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   const userInitial = user?.name ? user.name.charAt(0).toUpperCase() : "U";
   const routeLabel = getRouteLabel(location.pathname);
 
   return (
-    <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-neutral-200 bg-white/95 px-4 shadow-sm backdrop-blur-sm sm:px-6">
+    <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-neutral-200 bg-white px-3 sm:px-4">
       <div className="flex items-center gap-3">
         <button
           onClick={onMenuClick}
@@ -61,27 +74,45 @@ export function Topbar({ onMenuClick }) {
               {routeLabel}
             </span>
           </div>
-          <p className="hidden text-xs text-neutral-400 sm:block">
-            Control en tiempo real
-          </p>
+          <p className="hidden text-xs text-neutral-400 sm:block">Gestión de muelles</p>
         </div>
       </div>
 
-      <div className="flex items-center gap-2 sm:gap-4">
-        <div className="hidden md:block">
+      <div className="flex items-center gap-2 sm:gap-3">
+        <div className="hidden sm:flex items-center gap-2">
           <DateRangePicker />
+          <button
+            type="button"
+            onClick={handleRefresh}
+            className="inline-flex items-center justify-center rounded-lg border border-neutral-300 bg-white p-1.5 text-neutral-700 transition-colors hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-neutral-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={isRefreshing}
+            aria-label="Actualizar datos"
+            title="Actualizar datos"
+          >
+            <RotateCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} strokeWidth={1.75} />
+          </button>
         </div>
 
         <Badge status={syncState} className="hidden sm:inline-flex">
-          {syncState === "connected"
+          {syncState === "CONNECTED"
             ? "Live"
-            : syncState === "connecting"
+            : syncState === "CONNECTING" || syncState === "RECONNECTING"
             ? "Connecting..."
             : "Offline"}
         </Badge>
 
-        <div className="md:hidden">
-          <DateRangePicker />
+        <div className="flex items-center gap-2 sm:hidden">
+          <DateRangePicker compact />
+          <button
+            type="button"
+            onClick={handleRefresh}
+            className="inline-flex items-center justify-center rounded-lg border border-neutral-300 bg-white p-1.5 text-neutral-700 transition-colors hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-neutral-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={isRefreshing}
+            aria-label="Actualizar datos"
+            title="Actualizar datos"
+          >
+            <RotateCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} strokeWidth={1.75} />
+          </button>
         </div>
 
         <div className="relative" ref={menuRef}>

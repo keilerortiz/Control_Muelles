@@ -1,7 +1,7 @@
 export function Tabs({ tabs = [], value, onChange, className = "" }) {
   return (
-    <div className={`border-b border-neutral-200 ${className}`}>
-      <div className="flex flex-wrap gap-4">
+    <div className={`rounded-2xl border border-neutral-200 bg-white p-1 shadow-sm shadow-neutral-900/5 ${className}`}>
+      <div className="flex gap-1 overflow-x-auto">
         {tabs.map((tab) => {
           const isActive = tab.value === value;
           const Icon = tab.icon;
@@ -11,14 +11,14 @@ export function Tabs({ tabs = [], value, onChange, className = "" }) {
               key={tab.value}
               type="button"
               onClick={() => onChange(tab.value)}
-              className={`inline-flex items-center gap-2 border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
+              className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-xl px-3 text-sm font-semibold transition-all duration-200 ${
                 isActive
-                  ? "border-brand-600 text-brand-700"
-                  : "border-transparent text-neutral-500 hover:border-neutral-300 hover:text-neutral-700"
+                  ? "bg-brand-50 text-brand-700 shadow-sm shadow-neutral-900/5 ring-1 ring-brand-100"
+                  : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800"
               }`}
             >
               {Icon ? <Icon className="h-4 w-4" strokeWidth={1.75} /> : null}
-              <span>{tab.label}</span>
+              <span className="whitespace-nowrap">{tab.label}</span>
             </button>
           );
         })}

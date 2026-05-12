@@ -1,4 +1,4 @@
-from sqlalchemy import bindparam, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -308,24 +308,32 @@ class MasterDataRepository:
                 u.IsActive,
                 u.CreatedAt,
                 u.UpdatedAt,
-                STRING_AGG(r.Code, ',') AS Roles
+                STUFF(
+                    (
+                        SELECT ',' + r2.Code
+                        FROM dbo.tbl_UserRole ur2
+                        INNER JOIN dbo.tbl_Role r2 ON r2.Id = ur2.RoleId
+                        WHERE ur2.UserId = u.Id
+                        FOR XML PATH(''), TYPE
+                    ).value('.', 'NVARCHAR(MAX)'),
+                    1,
+                    1,
+                    ''
+                ) AS Roles
             FROM dbo.tbl_User u
-            INNER JOIN dbo.tbl_UserRole ur ON ur.UserId = u.Id
-            INNER JOIN dbo.tbl_Role r ON r.Id = ur.RoleId
             WHERE u.IsDeleted = 0
-            GROUP BY u.Id, u.Name, u.Email, u.IsActive, u.CreatedAt, u.UpdatedAt
             ORDER BY u.Name ASC
             """
         )
 
     async def get_role_ids(self, role_codes: list[str]) -> list[int]:
-        query = text("SELECT Id FROM dbo.tbl_Role WHERE Code IN :role_codes").bindparams(
-            bindparam("role_codes", expanding=True),
-        )
-        result = await self.session.execute(
-            query,
-            {"role_codes": role_codes},
-        )
+        if not role_codes:
+            return []
+
+        placeholders = ", ".join([f":code_{index}" for index in range(len(role_codes))])
+        query = text(f"SELECT Id FROM dbo.tbl_Role WHERE Code IN ({placeholders})")
+        params = {f"code_{index}": role_codes[index] for index in range(len(role_codes))}
+        result = await self.session.execute(query, params)
         return [int(value) for value in result.scalars().all()]
 
     async def find_user_by_email(self, email: str, exclude_user_id: int | None = None) -> dict | None:
@@ -431,13 +439,21 @@ class MasterDataRepository:
                     u.IsActive,
                     u.CreatedAt,
                     u.UpdatedAt,
-                    STRING_AGG(r.Code, ',') AS Roles
+                    STUFF(
+                        (
+                            SELECT ',' + r2.Code
+                            FROM dbo.tbl_UserRole ur2
+                            INNER JOIN dbo.tbl_Role r2 ON r2.Id = ur2.RoleId
+                            WHERE ur2.UserId = u.Id
+                            FOR XML PATH(''), TYPE
+                        ).value('.', 'NVARCHAR(MAX)'),
+                        1,
+                        1,
+                        ''
+                    ) AS Roles
                 FROM dbo.tbl_User u
-                INNER JOIN dbo.tbl_UserRole ur ON ur.UserId = u.Id
-                INNER JOIN dbo.tbl_Role r ON r.Id = ur.RoleId
                 WHERE u.Id = :user_id
                   AND u.IsDeleted = 0
-                GROUP BY u.Id, u.Name, u.Email, u.IsActive, u.CreatedAt, u.UpdatedAt
                 """
             ),
             {"user_id": user_id},

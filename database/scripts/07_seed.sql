@@ -57,8 +57,12 @@ INSERT INTO dbo.tbl_Dock (Name) VALUES ('Muelle 1'), ('Muelle 2'), ('Muelle 3');
 INSERT INTO dbo.tbl_Operator (Name, OperatorLevel) VALUES
     ('Operario Senior 1', 'SENIOR'),
     ('Operario Senior 2', 'SENIOR'),
+    ('Operario Senior 3', 'SENIOR'),
+    ('Operario Senior 4', 'SENIOR'),
     ('Operario Junior 1', 'JUNIOR'),
-    ('Operario Junior 2', 'JUNIOR');
+    ('Operario Junior 2', 'JUNIOR'),
+    ('Operario Junior 3', 'JUNIOR'),
+    ('Operario Junior 4', 'JUNIOR');
 
 INSERT INTO dbo.tbl_DockCapability (DockId, OperationTypeId, VehicleTypeId)
 SELECT d.Id, o.Id, v.Id

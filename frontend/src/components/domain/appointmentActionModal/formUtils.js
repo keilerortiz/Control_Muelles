@@ -17,15 +17,12 @@ export function buildInitialForm(appointment, candidates) {
     dockId: appointment?.DockId ?? firstDockId,
     seniorIds: [],
     juniorIds: [],
-    documentDeliveryAt: toDateTimeLocalValue(appointment?.DocumentDeliveryAt || new Date().toISOString()),
-    processStartAt: toDateTimeLocalValue(appointment?.ProcessStartAt || new Date().toISOString()),
-    processEndAt: toDateTimeLocalValue(appointment?.ProcessEndAt || new Date().toISOString()),
-    finalizedAt: toDateTimeLocalValue(appointment?.FinalizedAt || new Date().toISOString()),
+    remissions: appointment?.Remissions ?? "",
+    precincts: appointment?.Precincts ?? "",
     movedWeightKg: appointment?.MovedWeightKg ?? 0,
     otcNonComplianceReason: appointment?.OtcNonComplianceReason ?? "",
     otsNonComplianceReason: appointment?.OtsNonComplianceReason ?? "",
     nonComplianceComment: appointment?.NonComplianceComment ?? "",
-    checkoutAt: toDateTimeLocalValue(appointment?.CheckoutAt || new Date().toISOString()),
     cancellationReason: appointment?.CancellationReason ?? "",
   };
 }
@@ -72,18 +69,17 @@ export function buildPayloadByAction(form, candidatesVersion) {
       candidatesVersion,
     },
     startProcess: {
-      documentDeliveryAt: fromDateTimeLocalValue(form.documentDeliveryAt),
-      processStartAt: fromDateTimeLocalValue(form.processStartAt),
+      remissions: form.remissions.trim(),
+      precincts: form.precincts.trim(),
     },
-    toSign: { processEndAt: fromDateTimeLocalValue(form.processEndAt) },
+    toSign: {},
     finalize: {
-      finalizedAt: fromDateTimeLocalValue(form.finalizedAt),
       movedWeightKg: Number(form.movedWeightKg),
       otcNonComplianceReason: form.otcNonComplianceReason.trim() || null,
       otsNonComplianceReason: form.otsNonComplianceReason.trim() || null,
       nonComplianceComment: form.nonComplianceComment.trim() || null,
     },
-    checkout: { checkoutAt: fromDateTimeLocalValue(form.checkoutAt) },
+    checkout: {},
     cancel: { cancellationReason: form.cancellationReason.trim() },
   };
 }

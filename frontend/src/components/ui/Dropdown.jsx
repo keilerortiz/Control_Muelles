@@ -18,6 +18,7 @@ export const Dropdown = forwardRef(
     const [internalOpen, setInternalOpen] = useState(false);
     const isControlled = controlledOpen !== undefined;
     const open = isControlled ? controlledOpen : internalOpen;
+
     const setOpen = (value) => {
       if (!isControlled) setInternalOpen(value);
       onOpenChange?.(value);
@@ -29,9 +30,15 @@ export const Dropdown = forwardRef(
 
     const updatePosition = () => {
       if (!triggerRef.current || !dropdownRef.current) return;
+
       const triggerRect = triggerRef.current.getBoundingClientRect();
       const dropdownRect = dropdownRef.current.getBoundingClientRect();
-      let top = side === "bottom" ? triggerRect.bottom + 4 : triggerRect.top - dropdownRect.height - 4;
+
+      let top =
+        side === "bottom"
+          ? triggerRect.bottom + 8
+          : triggerRect.top - dropdownRect.height - 8;
+
       let left =
         align === "left"
           ? triggerRect.left
@@ -41,10 +48,13 @@ export const Dropdown = forwardRef(
       if (left + dropdownRect.width > window.innerWidth) {
         left = window.innerWidth - dropdownRect.width - 8;
       }
+
       if (left < 8) left = 8;
+
       if (top + dropdownRect.height > window.innerHeight) {
-        top = triggerRect.top - dropdownRect.height - 4;
+        top = triggerRect.top - dropdownRect.height - 8;
       }
+
       if (top < 8) top = 8;
 
       setPosition({ top, left });
@@ -56,6 +66,7 @@ export const Dropdown = forwardRef(
         window.addEventListener("scroll", updatePosition);
         window.addEventListener("resize", updatePosition);
       }
+
       return () => {
         window.removeEventListener("scroll", updatePosition);
         window.removeEventListener("resize", updatePosition);
@@ -65,6 +76,7 @@ export const Dropdown = forwardRef(
     // Cerrar al hacer clic fuera
     useEffect(() => {
       if (!open) return;
+
       const handleClickOutside = (event) => {
         if (
           triggerRef.current &&
@@ -75,6 +87,7 @@ export const Dropdown = forwardRef(
           setOpen(false);
         }
       };
+
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [open]);
@@ -82,14 +95,17 @@ export const Dropdown = forwardRef(
     // Cerrar con Escape
     useEffect(() => {
       if (!open) return;
+
       const handleEscape = (e) => {
         if (e.key === "Escape") setOpen(false);
       };
+
       document.addEventListener("keydown", handleEscape);
       return () => document.removeEventListener("keydown", handleEscape);
     }, [open]);
 
     const toggle = () => setOpen(!open);
+
     const triggerElement = cloneElement(trigger, {
       onClick: (e) => {
         trigger.props.onClick?.(e);
@@ -105,11 +121,12 @@ export const Dropdown = forwardRef(
     return (
       <>
         {triggerElement}
+
         {open &&
           createPortal(
             <div
               ref={dropdownRef}
-              className={`absolute z-50 min-w-[160px] rounded-lg border border-neutral-200 bg-white p-1 shadow-lg ${className}`}
+              className={`absolute z-50 min-w-[180px] overflow-hidden rounded-2xl border border-neutral-200 bg-white p-1.5 shadow-xl shadow-neutral-900/10 ring-1 ring-neutral-900/5 ${className}`}
               style={{ top: position.top, left: position.left }}
               role="menu"
             >
@@ -130,22 +147,28 @@ export const DropdownItem = forwardRef(
     return (
       <button
         ref={ref}
-        className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-neutral-700 transition-colors hover:bg-neutral-100 focus:bg-neutral-100 focus:outline-none ${
+        className={`group flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-neutral-700 transition-all duration-150 ease-out hover:bg-neutral-100 hover:text-neutral-900 focus:bg-neutral-100 focus:text-neutral-900 focus:outline-none ${
           disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"
         } ${className}`}
         onClick={disabled ? undefined : onClick}
         disabled={disabled}
         role="menuitem"
       >
-        {icon && <span className="flex-shrink-0 text-neutral-500">{icon}</span>}
-        <span className="flex-1 text-left">{children}</span>
+        {icon && (
+          <span className="flex shrink-0 items-center justify-center text-neutral-400 transition-colors group-hover:text-neutral-600 group-focus:text-neutral-600 [&>svg]:h-4 [&>svg]:w-4">
+            {icon}
+          </span>
+        )}
+
+        <span className="min-w-0 flex-1 truncate text-left">{children}</span>
       </button>
     );
   }
 );
+
 DropdownItem.displayName = "DropdownItem";
 
 // Divisor
 export const DropdownDivider = () => (
-  <hr className="my-1 border-t border-neutral-100" />
+  <hr className="my-1.5 border-t border-neutral-200" />
 );

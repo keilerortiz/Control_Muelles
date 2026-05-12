@@ -26,8 +26,8 @@ export function ActionBody({
     return (
       <FieldGroup title="Ingreso a patio" icon={Truck}>
         <Input required label="Nombre del conductor" value={form.driverName} onChange={(event) => updateValue("driverName", event.target.value)} />
-        <Input required label="Documento del conductor" value={form.driverDocument} onChange={(event) => updateValue("driverDocument", event.target.value)} />
-        <Input required label="Placa del vehículo" value={form.vehiclePlate} onChange={(event) => updateValue("vehiclePlate", event.target.value)} className="md:col-span-2" />
+        <Input required label="Cédula del conductor" value={form.driverDocument} onChange={(event) => updateValue("driverDocument", event.target.value)} type="number"/>
+        <Input required label="Placa del vehículo" value={form.vehiclePlate} onChange={(event) => updateValue("vehiclePlate", event.target.value)} className="md:col-span-2" maxLength={6} />
       </FieldGroup>
     );
   }
@@ -44,9 +44,11 @@ export function ActionBody({
               </option>
             ))}
           </Select>
-          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
-            {candidatesLoading ? "Consultando candidatos..." : `Versión de candidatos: ${candidates?.version || "-"}`}
-          </div>
+          {candidatesLoading ? (
+            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
+              Consultando candidatos...
+            </div>
+          ) : null}
         </FieldGroup>
         <div className="grid gap-4 md:grid-cols-2">
           <OperatorSelection checkedIds={form.seniorIds} operators={seniorOperators} title="Operarios senior" toggleOperator={(id) => toggleOperator("seniorIds", id)} />
@@ -59,8 +61,11 @@ export function ActionBody({
   if (action === "startProcess") {
     return (
       <FieldGroup title="Inicio de proceso" icon={Clock}>
-        <Input required label="Entrega de documentos" type="datetime-local" value={form.documentDeliveryAt} onChange={(event) => updateValue("documentDeliveryAt", event.target.value)} />
-        <Input required label="Inicio real del proceso" type="datetime-local" value={form.processStartAt} onChange={(event) => updateValue("processStartAt", event.target.value)} />
+        <Input required label="Remisión" value={form.remissions} onChange={(event) => updateValue("remissions", event.target.value)} />
+        <Input required label="Precintos" value={form.precincts} onChange={(event) => updateValue("precincts", event.target.value)} />
+        <p className="md:col-span-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+          La hora de entrega de documentos y la hora de inicio del proceso se registran automáticamente al confirmar esta acción.
+        </p>
       </FieldGroup>
     );
   }
@@ -68,7 +73,9 @@ export function ActionBody({
   if (action === "toSign") {
     return (
       <FieldGroup title="Cierre operativo" icon={FileCheck}>
-        <Input required label="Fin de proceso" type="datetime-local" value={form.processEndAt} onChange={(event) => updateValue("processEndAt", event.target.value)} className="md:col-span-2" />
+        <p className="md:col-span-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+          La hora de fin de proceso se registra automáticamente al confirmar esta acción.
+        </p>
       </FieldGroup>
     );
   }
@@ -77,8 +84,10 @@ export function ActionBody({
     return (
       <div className="space-y-4">
         <FieldGroup title="Finalización" icon={Calendar}>
-          <Input required label="Fecha de finalización" type="datetime-local" value={form.finalizedAt} onChange={(event) => updateValue("finalizedAt", event.target.value)} />
           <Input required label="Peso movido (kg)" type="number" min="0" step="0.01" value={form.movedWeightKg} onChange={(event) => updateValue("movedWeightKg", event.target.value)} />
+          <p className="md:col-span-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            La hora de finalización se registra automáticamente al confirmar esta acción.
+          </p>
         </FieldGroup>
         <FieldGroup title="Incumplimientos" icon={AlertCircle}>
           <Input label="Causal OTC" value={form.otcNonComplianceReason} onChange={(event) => updateValue("otcNonComplianceReason", event.target.value)} />
@@ -98,7 +107,9 @@ export function ActionBody({
   if (action === "checkout") {
     return (
       <FieldGroup title="Salida de patio" icon={Truck}>
-        <Input required label="Fecha de checkout" type="datetime-local" value={form.checkoutAt} onChange={(event) => updateValue("checkoutAt", event.target.value)} className="md:col-span-2" />
+        <p className="md:col-span-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+          La hora de checkout se registra automáticamente al confirmar esta acción.
+        </p>
       </FieldGroup>
     );
   }
@@ -121,7 +132,7 @@ export function ActionBody({
   if (action === "remove") {
     return (
       <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-        La cita #{appointment?.Id} será eliminada. Esta acción solo aplica para citas en estado <strong>AGENDADA</strong>.
+        ¿Confirma la eliminación de la cita #{appointment?.Id}?
       </div>
     );
   }

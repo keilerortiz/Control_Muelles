@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Query, Request
 
@@ -22,12 +22,18 @@ from app.services.appointment_service import AppointmentService
 router = APIRouter(prefix="/appointments", tags=["appointments"])
 
 
+def _origin_client_id(request: Request) -> str | None:
+    return request.headers.get("X-Client-ID")
+
+
 @router.get("/dashboard-summary")
 async def dashboard_summary(
     date_from: datetime | None = Query(default=None),
     date_to: datetime | None = Query(default=None),
     service: AppointmentService = Depends(get_appointment_service),
-    _=Depends(require_roles(Role.ADMIN, Role.CONSULTOR, Role.PLANEADOR, Role.PORTERIA, Role.SUPERVISOR)),
+    _=Depends(
+        require_roles(Role.ADMIN, Role.CONSULTOR, Role.PLANEADOR, Role.PORTERIA, Role.SUPERVISOR)
+    ),
 ):
     data = await service.dashboard_summary(date_from=date_from, date_to=date_to)
     return success_response("Dashboard operativo", data)
@@ -42,7 +48,9 @@ async def list_appointments(
     date_from: datetime | None = Query(default=None),
     date_to: datetime | None = Query(default=None),
     service: AppointmentService = Depends(get_appointment_service),
-    _=Depends(require_roles(Role.ADMIN, Role.CONSULTOR, Role.PLANEADOR, Role.PORTERIA, Role.SUPERVISOR)),
+    _=Depends(
+        require_roles(Role.ADMIN, Role.CONSULTOR, Role.PLANEADOR, Role.PORTERIA, Role.SUPERVISOR)
+    ),
 ):
     data = await service.list_appointments(
         skip=skip,
@@ -59,7 +67,9 @@ async def list_appointments(
 async def get_appointment(
     appointment_id: int,
     service: AppointmentService = Depends(get_appointment_service),
-    _=Depends(require_roles(Role.ADMIN, Role.CONSULTOR, Role.PLANEADOR, Role.PORTERIA, Role.SUPERVISOR)),
+    _=Depends(
+        require_roles(Role.ADMIN, Role.CONSULTOR, Role.PLANEADOR, Role.PORTERIA, Role.SUPERVISOR)
+    ),
 ):
     data = await service.detail(appointment_id)
     return success_response("Detalle obtenido", data)
@@ -69,7 +79,9 @@ async def get_appointment(
 async def status_log(
     appointment_id: int,
     service: AppointmentService = Depends(get_appointment_service),
-    _=Depends(require_roles(Role.ADMIN, Role.CONSULTOR, Role.PLANEADOR, Role.PORTERIA, Role.SUPERVISOR)),
+    _=Depends(
+        require_roles(Role.ADMIN, Role.CONSULTOR, Role.PLANEADOR, Role.PORTERIA, Role.SUPERVISOR)
+    ),
 ):
     data = await service.status_log(appointment_id)
     return success_response("Historial obtenido", data)
@@ -92,8 +104,13 @@ async def create_appointment(
     service: AppointmentService = Depends(get_appointment_service),
     current_user=Depends(require_roles(Role.PLANEADOR, Role.ADMIN)),
 ):
-    data = await service.create(payload.model_dump(), current_user.user_id, request.state.request_id)
-    return success_response("Cita creada", data, status_code=201)
+    data = await service.create(
+        payload.model_dump(),
+        current_user.user_id,
+        request.state.request_id,
+        _origin_client_id(request),
+    )
+    return success_response("Cita creada exitosamente.", data, status_code=201)
 
 
 @router.put("/{appointment_id}")
@@ -104,8 +121,14 @@ async def update_appointment(
     service: AppointmentService = Depends(get_appointment_service),
     current_user=Depends(require_roles(Role.PLANEADOR, Role.ADMIN)),
 ):
-    data = await service.update(appointment_id, payload.model_dump(), current_user.user_id, request.state.request_id)
-    return success_response("Cita actualizada", data)
+    data = await service.update(
+        appointment_id,
+        payload.model_dump(),
+        current_user.user_id,
+        request.state.request_id,
+        _origin_client_id(request),
+    )
+    return success_response("Cita actualizada exitosamente.", data)
 
 
 @router.delete("/{appointment_id}")
@@ -115,8 +138,10 @@ async def delete_appointment(
     service: AppointmentService = Depends(get_appointment_service),
     current_user=Depends(require_roles(Role.PLANEADOR, Role.ADMIN)),
 ):
-    await service.delete(appointment_id, current_user.user_id, request.state.request_id)
-    return success_response("Cita eliminada")
+    await service.delete(
+        appointment_id, current_user.user_id, request.state.request_id, _origin_client_id(request)
+    )
+    return success_response("Cita eliminada exitosamente.")
 
 
 @router.post("/{appointment_id}/checkin")
@@ -127,8 +152,14 @@ async def checkin(
     service: AppointmentService = Depends(get_appointment_service),
     current_user=Depends(require_roles(Role.PORTERIA, Role.ADMIN)),
 ):
-    data = await service.checkin(appointment_id, payload.model_dump(), current_user.user_id, request.state.request_id)
-    return success_response("Check-in exitoso", data)
+    data = await service.checkin(
+        appointment_id,
+        payload.model_dump(),
+        current_user.user_id,
+        request.state.request_id,
+        _origin_client_id(request),
+    )
+    return success_response("Ingreso registrado exitosamente.", data)
 
 
 @router.post("/{appointment_id}/assign")
@@ -139,8 +170,14 @@ async def assign(
     service: AppointmentService = Depends(get_appointment_service),
     current_user=Depends(require_roles(Role.SUPERVISOR, Role.ADMIN)),
 ):
-    data = await service.assign(appointment_id, payload.model_dump(), current_user.user_id, request.state.request_id)
-    return success_response("Recursos asignados", data)
+    data = await service.assign(
+        appointment_id,
+        payload.model_dump(),
+        current_user.user_id,
+        request.state.request_id,
+        _origin_client_id(request),
+    )
+    return success_response("Recursos asignados exitosamente.", data)
 
 
 @router.post("/{appointment_id}/reassign")
@@ -151,8 +188,14 @@ async def reassign(
     service: AppointmentService = Depends(get_appointment_service),
     current_user=Depends(require_roles(Role.SUPERVISOR, Role.ADMIN)),
 ):
-    data = await service.reassign(appointment_id, payload.model_dump(), current_user.user_id, request.state.request_id)
-    return success_response("Recursos reasignados", data)
+    data = await service.reassign(
+        appointment_id,
+        payload.model_dump(),
+        current_user.user_id,
+        request.state.request_id,
+        _origin_client_id(request),
+    )
+    return success_response("Recursos reasignados exitosamente.", data)
 
 
 @router.post("/{appointment_id}/start-process")
@@ -165,12 +208,12 @@ async def start_process(
 ):
     data = await service.start_process(
         appointment_id,
-        payload.documentDeliveryAt,
-        payload.processStartAt,
+        payload.model_dump(),
         current_user.user_id,
         request.state.request_id,
+        _origin_client_id(request),
     )
-    return success_response("Proceso iniciado", data)
+    return success_response("Proceso iniciado exitosamente.", data)
 
 
 @router.post("/{appointment_id}/to-sign")
@@ -181,8 +224,14 @@ async def to_sign(
     service: AppointmentService = Depends(get_appointment_service),
     current_user=Depends(require_roles(Role.PLANEADOR, Role.ADMIN)),
 ):
-    data = await service.to_sign(appointment_id, payload.processEndAt, current_user.user_id, request.state.request_id)
-    return success_response("Cita en firma", data)
+    data = await service.to_sign(
+        appointment_id,
+        datetime.now(UTC),
+        current_user.user_id,
+        request.state.request_id,
+        _origin_client_id(request),
+    )
+    return success_response("Vehículo enviado a firma exitosamente.", data)
 
 
 @router.post("/{appointment_id}/finalize")
@@ -193,8 +242,14 @@ async def finalize(
     service: AppointmentService = Depends(get_appointment_service),
     current_user=Depends(require_roles(Role.SUPERVISOR, Role.ADMIN)),
 ):
-    data = await service.finalize(appointment_id, payload.model_dump(), current_user.user_id, request.state.request_id)
-    return success_response("Cita finalizada", data)
+    data = await service.finalize(
+        appointment_id,
+        payload.model_dump(),
+        current_user.user_id,
+        request.state.request_id,
+        _origin_client_id(request),
+    )
+    return success_response("Cita finalizada exitosamente.", data)
 
 
 @router.post("/{appointment_id}/checkout")
@@ -205,8 +260,14 @@ async def checkout(
     service: AppointmentService = Depends(get_appointment_service),
     current_user=Depends(require_roles(Role.PORTERIA, Role.ADMIN)),
 ):
-    data = await service.checkout(appointment_id, payload.checkoutAt, current_user.user_id, request.state.request_id)
-    return success_response("Checkout exitoso", data)
+    data = await service.checkout(
+        appointment_id,
+        datetime.now(UTC),
+        current_user.user_id,
+        request.state.request_id,
+        _origin_client_id(request),
+    )
+    return success_response("Salida registrada exitosamente.", data)
 
 
 @router.post("/{appointment_id}/cancel")
@@ -222,5 +283,6 @@ async def cancel(
         payload.cancellationReason,
         current_user.user_id,
         request.state.request_id,
+        _origin_client_id(request),
     )
     return success_response("Operación cancelada", data)
