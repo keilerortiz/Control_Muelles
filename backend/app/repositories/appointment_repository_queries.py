@@ -84,8 +84,8 @@ class AppointmentRepositoryQueriesMixin:
                       AND ao.IsActive = 1
                 ) operator_metrics
                 WHERE a.IsDeleted = 0
-                  AND (:date_from IS NULL OR a.ScheduledAt >= :date_from)
-                  AND (:date_to IS NULL OR a.ScheduledAt <= :date_to)
+                  AND (:date_from IS NULL OR COALESCE(a.ProcessStartAt, a.ScheduledAt) >= :date_from)
+                  AND (:date_to IS NULL OR COALESCE(a.ProcessStartAt, a.ScheduledAt) <= :date_to)
             )
         """
 
@@ -300,12 +300,46 @@ class AppointmentRepositoryQueriesMixin:
     ) -> tuple[list[dict], int]:
         query = text(
             """
-            SELECT *, COUNT(1) OVER() AS TotalRows
-            FROM dbo.vw_AppointmentOperational
+            SELECT
+                base.*,
+                operator_names.SeniorOperators,
+                operator_names.JuniorOperators,
+                COUNT(1) OVER() AS TotalRows
+            FROM dbo.vw_AppointmentOperational base
+            OUTER APPLY (
+                SELECT
+                    STRING_AGG(CASE WHEN src.OperatorLevel = 'SENIOR' THEN src.Name END, ', ') AS SeniorOperators,
+                    STRING_AGG(CASE WHEN src.OperatorLevel = 'JUNIOR' THEN src.Name END, ', ') AS JuniorOperators
+                FROM (
+                    SELECT o.OperatorLevel, o.Name
+                    FROM dbo.tbl_AppointmentOperator ao
+                    INNER JOIN dbo.tbl_Operator o ON o.Id = ao.OperatorId
+                    WHERE ao.AppointmentId = base.Id
+                      AND ao.IsActive = 1
+                    UNION ALL
+                    SELECT o.OperatorLevel, o.Name
+                    FROM dbo.tbl_AppointmentOperator ao
+                    INNER JOIN dbo.tbl_Operator o ON o.Id = ao.OperatorId
+                    WHERE ao.AppointmentId = base.Id
+                      AND ao.IsActive = 0
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM dbo.tbl_AppointmentOperator active_ao
+                          WHERE active_ao.AppointmentId = base.Id
+                            AND active_ao.IsActive = 1
+                      )
+                      AND ao.ReleasedAt = (
+                          SELECT MAX(last_ao.ReleasedAt)
+                          FROM dbo.tbl_AppointmentOperator last_ao
+                          WHERE last_ao.AppointmentId = base.Id
+                            AND last_ao.IsActive = 0
+                      )
+                ) src
+            ) operator_names
             WHERE (:search IS NULL OR ClientName LIKE '%' + :search + '%' OR VehiclePlate LIKE '%' + :search + '%')
               AND (:status IS NULL OR Status = :status)
-              AND (:date_from IS NULL OR ScheduledAt >= :date_from)
-              AND (:date_to IS NULL OR ScheduledAt <= :date_to)
+              AND (:date_from IS NULL OR COALESCE(ProcessStartAt, ScheduledAt) >= :date_from)
+              AND (:date_to IS NULL OR COALESCE(ProcessStartAt, ScheduledAt) <= :date_to)
             ORDER BY ScheduledAt DESC
             OFFSET :skip ROWS FETCH NEXT :take ROWS ONLY
             OPTION (RECOMPILE)
@@ -343,8 +377,8 @@ class AppointmentRepositoryQueriesMixin:
             FROM dbo.vw_AppointmentOperational
             WHERE (:search IS NULL OR ClientName LIKE '%' + :search + '%' OR VehiclePlate LIKE '%' + :search + '%')
               AND (:status IS NULL OR Status = :status)
-              AND (:date_from IS NULL OR ScheduledAt >= :date_from)
-              AND (:date_to IS NULL OR ScheduledAt <= :date_to)
+              AND (:date_from IS NULL OR COALESCE(ProcessStartAt, ScheduledAt) >= :date_from)
+              AND (:date_to IS NULL OR COALESCE(ProcessStartAt, ScheduledAt) <= :date_to)
             """
         )
         result = await self.session.execute(

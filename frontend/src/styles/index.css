@@ -3,10 +3,11 @@
 @tailwind utilities;
 
 :root {
-  --bg-primary: #f8fafc;
-  --bg-surface: #ffffff;
-  --text-primary: #0f172a;
-  --text-muted: #475569;
+  /* Tokens alineados con tailwind.config.js (neutral) */
+  --bg-primary: #f8fafc; /* neutral-50 */
+  --bg-surface: #ffffff; /* neutral-white */
+  --text-primary: #0f172a; /* neutral-900 */
+  --text-muted: #475569; /* neutral-600 */
 }
 
 body {
