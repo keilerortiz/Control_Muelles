@@ -59,7 +59,7 @@ class AppointmentDevStoreQueriesMixin:
                 otc_total += 1
                 if document_delivery_at <= max(arrival_at, scheduled_at) + timedelta(minutes=35):
                     otc_compliant += 1
-            if process_start_at and process_end_at and standard_time > 0:
+            if item["Status"] in {"PARA_FIRMAR", "FINALIZADO", "ATENDIDA"} and process_start_at and process_end_at and standard_time > 0:
                 ots_total += 1
                 if int((process_end_at - process_start_at).total_seconds() // 60) <= standard_time:
                     ots_compliant += 1
@@ -75,6 +75,61 @@ class AppointmentDevStoreQueriesMixin:
                 queue.append({"appointmentId": item["Id"], "status": item["Status"], "queueScore": 1})
 
         return {"total": total, "agendada": count("AGENDADA"), "en_patio": count("EN_PATIO"), "entrega_documentos": count("ENTREGA_DOCUMENTOS"), "en_proceso": count("EN_PROCESO"), "para_firmar": count("PARA_FIRMAR"), "finalizado": count("FINALIZADO"), "atendida": attended, "cancelada": count("OPERACION_CANCELADA"), "completionRate": round((attended * 100.0 / total), 2) if total else 0, "operationalState": {"activeResources": count("EN_PATIO") + count("ENTREGA_DOCUMENTOS") + count("EN_PROCESO"), "activeOperations": count("EN_PATIO") + count("ENTREGA_DOCUMENTOS") + count("EN_PROCESO") + count("PARA_FIRMAR")}, "kpis": {"cumpleCitaRate": round((otc_total * 100.0 / total), 2) if total else 0, "otcRate": round((otc_compliant * 100.0 / otc_total), 2) if otc_total else None, "otsRate": round((ots_compliant * 100.0 / ots_total), 2) if ots_total else None}, "slaMetrics": {"averageAssignmentDelayMinutes": self._average_metric(items, "AssignmentDelayMinutes"), "averageStartDelayMinutes": self._average_metric(items, "StartDelayMinutes"), "averageCheckoutDelayMinutes": self._average_metric(items, "CheckoutDelayMinutes")}, "queuePressure": {"activeCount": len(queue), "highestScore": max((row["queueScore"] for row in queue), default=0), "items": queue[:10]}, "alerts": alerts[:10]}
+
+    def operator_performance(self, date_from=None, date_to=None) -> dict[str, Any]:
+        items = [
+            item
+            for item in self._appointments.values()
+            if self._match(item, search=None, status=None, date_from=date_from, date_to=date_to)
+        ]
+        now = datetime.now(UTC)
+        operator_metrics: dict[int, dict[str, Any]] = {}
+
+        for item in items:
+            status = item.get("Status")
+            process_start_at = datetime.fromisoformat(item["ProcessStartAt"]) if item.get("ProcessStartAt") else None
+            process_end_at = datetime.fromisoformat(item["ProcessEndAt"]) if item.get("ProcessEndAt") else None
+            standard_time = int(item.get("StandardTimeMinutes") or 0)
+            is_evaluable = (
+                status in {"PARA_FIRMAR", "FINALIZADO", "ATENDIDA"}
+                and process_start_at is not None
+                and standard_time > 0
+            )
+            if not is_evaluable:
+                continue
+
+            effective_end = process_end_at or now
+            elapsed_minutes = max(int((effective_end - process_start_at).total_seconds() // 60), 0)
+            is_compliant = elapsed_minutes <= standard_time
+            assigned_ids = item.get("AssignedOperatorIds") or []
+
+            for operator_id in assigned_ids:
+                operator = self._operators_catalog.get(operator_id)
+                if not operator:
+                    continue
+                current = operator_metrics.get(operator_id) or {
+                    "operatorId": operator_id,
+                    "name": operator.get("Name"),
+                    "role": "Senior" if operator.get("OperatorLevel") == "SENIOR" else "Junior",
+                    "executedMinutes": 0,
+                    "totalOperations": 0,
+                    "compliantOperations": 0,
+                }
+                current["executedMinutes"] += elapsed_minutes
+                current["totalOperations"] += 1
+                if is_compliant:
+                    current["compliantOperations"] += 1
+                operator_metrics[operator_id] = current
+
+        rows = []
+        for metric in operator_metrics.values():
+            total_operations = int(metric["totalOperations"])
+            compliant_operations = int(metric["compliantOperations"])
+            metric["otsRate"] = round((compliant_operations * 100.0 / total_operations), 2) if total_operations else 0.0
+            rows.append(metric)
+
+        rows.sort(key=lambda item: (-item["otsRate"], -item["executedMinutes"], item["name"]))
+        return {"items": rows}
 
     def list_items(self, skip: int, take: int, search: str | None, status: str | None, date_from=None, date_to=None) -> dict[str, Any]:
         filtered = [

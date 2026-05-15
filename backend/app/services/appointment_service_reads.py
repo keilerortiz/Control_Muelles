@@ -73,3 +73,19 @@ class AppointmentServiceReadsMixin:
             if self._dev_mode and self._is_db_unavailable(exc):
                 return DEV_APPOINTMENTS_STORE.candidates(appointment_id)
             raise
+
+    async def kpis_timeline(self, date_from=None, date_to=None) -> dict:
+        try:
+            return await self.repository.get_kpis_timeline(date_from=date_from, date_to=date_to)
+        except DBAPIError as exc:
+            if self._dev_mode and self._is_db_unavailable(exc):
+                return {"timezone": "America/Bogota", "buckets": []}
+            raise
+
+    async def operator_performance(self, date_from=None, date_to=None) -> dict:
+        try:
+            return await self.repository.get_operator_performance(date_from=date_from, date_to=date_to)
+        except DBAPIError as exc:
+            if self._dev_mode and self._is_db_unavailable(exc):
+                return DEV_APPOINTMENTS_STORE.operator_performance(date_from=date_from, date_to=date_to)
+            raise

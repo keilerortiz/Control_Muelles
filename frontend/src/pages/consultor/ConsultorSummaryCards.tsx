@@ -20,7 +20,7 @@ export function ConsultorSummaryCards({
   inProcessCount,
 }: ConsultorSummaryCardsProps) {
   const cards = [
-    { label: "Volumen total", value: `${totalVolume} Ton`, Icon: PackageCheck },
+    { label: "Volumen total", value: `${totalVolume} Kg`, Icon: PackageCheck },
     { label: "Mejor operario", value: bestOperario, Icon: Gauge },
     { label: "Incumplimientos", value: nonCompliances, Icon: OctagonAlert },
     { label: "Citas en proceso", value: inProcessCount, Icon: Activity },

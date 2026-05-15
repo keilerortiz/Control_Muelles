@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query, Request
 
@@ -20,10 +20,19 @@ from app.schemas.appointments import (
 from app.services.appointment_service import AppointmentService
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
+BOGOTA_TZ = timezone(timedelta(hours=-5))
 
 
 def _origin_client_id(request: Request) -> str | None:
     return request.headers.get("X-Client-ID")
+
+
+def _to_bogota_naive(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(BOGOTA_TZ).replace(tzinfo=None)
 
 
 @router.get("/dashboard-summary")
@@ -35,8 +44,43 @@ async def dashboard_summary(
         require_roles(Role.ADMIN, Role.CONSULTOR, Role.PLANEADOR, Role.PORTERIA, Role.SUPERVISOR)
     ),
 ):
-    data = await service.dashboard_summary(date_from=date_from, date_to=date_to)
+    data = await service.dashboard_summary(
+        date_from=_to_bogota_naive(date_from),
+        date_to=_to_bogota_naive(date_to),
+    )
     return success_response("Dashboard operativo", data)
+
+
+@router.get("/kpis/timeline")
+async def kpis_timeline(
+    date_from: datetime | None = Query(default=None),
+    date_to: datetime | None = Query(default=None),
+    service: AppointmentService = Depends(get_appointment_service),
+    _=Depends(
+        require_roles(Role.ADMIN, Role.CONSULTOR, Role.PLANEADOR, Role.PORTERIA, Role.SUPERVISOR)
+    ),
+):
+    data = await service.kpis_timeline(
+        date_from=_to_bogota_naive(date_from),
+        date_to=_to_bogota_naive(date_to),
+    )
+    return success_response("Timeline de KPIs", data)
+
+
+@router.get("/operators/performance")
+async def operator_performance(
+    date_from: datetime | None = Query(default=None),
+    date_to: datetime | None = Query(default=None),
+    service: AppointmentService = Depends(get_appointment_service),
+    _=Depends(
+        require_roles(Role.ADMIN, Role.CONSULTOR, Role.PLANEADOR, Role.PORTERIA, Role.SUPERVISOR)
+    ),
+):
+    data = await service.operator_performance(
+        date_from=_to_bogota_naive(date_from),
+        date_to=_to_bogota_naive(date_to),
+    )
+    return success_response("Desempeño por operario", data)
 
 
 @router.get("")
@@ -57,8 +101,8 @@ async def list_appointments(
         take=take,
         search=search,
         status=status,
-        date_from=date_from,
-        date_to=date_to,
+        date_from=_to_bogota_naive(date_from),
+        date_to=_to_bogota_naive(date_to),
     )
     return success_response("Listado obtenido", data)
 

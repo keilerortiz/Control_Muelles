@@ -6,6 +6,216 @@ from sqlalchemy import text
 
 
 class AppointmentRepositoryQueriesMixin:
+    async def get_kpis_timeline(self, date_from=None, date_to=None) -> dict:
+        result = await self.session.execute(
+            text(
+                """
+                WITH base AS (
+                    SELECT
+                        a.Id,
+                        a.Status,
+                        a.ScheduledAt,
+                        a.ArrivalAt,
+                        a.DocumentDeliveryAt,
+                        a.ProcessStartAt,
+                        a.ProcessEndAt,
+                        COALESCE(s.StandardTimeMinutes, ot.StandardTimeMinutes) AS StandardTimeMinutes
+                    FROM dbo.tbl_Appointment a
+                    INNER JOIN dbo.tbl_OperationType ot ON ot.Id = a.OperationTypeId
+                    LEFT JOIN dbo.tbl_BusinessRule br
+                        ON br.ClientId = a.ClientId
+                       AND br.OperationTypeId = a.OperationTypeId
+                       AND br.VehicleTypeId = a.VehicleTypeId
+                       AND br.IsActive = 1
+                    LEFT JOIN dbo.tbl_Standard s ON s.Id = br.StandardId AND s.IsActive = 1
+                    WHERE a.IsDeleted = 0
+                      AND (:date_from IS NULL OR COALESCE(a.ProcessStartAt, a.ScheduledAt) >= :date_from)
+                      AND (:date_to IS NULL OR COALESCE(a.ProcessStartAt, a.ScheduledAt) <= :date_to)
+                ),
+                otc_bucket AS (
+                    SELECT
+                        (DATEPART(HOUR, COALESCE(DocumentDeliveryAt, ScheduledAt)) / 2) * 2 AS bucket_start_hour,
+                        SUM(
+                            CASE
+                                WHEN ArrivalAt IS NOT NULL
+                                 AND ScheduledAt IS NOT NULL
+                                 AND ArrivalAt <= DATEADD(MINUTE, 15, ScheduledAt)
+                                THEN 1 ELSE 0
+                            END
+                        ) AS otc_total,
+                        SUM(
+                            CASE
+                                WHEN ArrivalAt IS NOT NULL
+                                 AND ScheduledAt IS NOT NULL
+                                 AND ArrivalAt <= DATEADD(MINUTE, 15, ScheduledAt)
+                                 AND DocumentDeliveryAt IS NOT NULL
+                                 AND DocumentDeliveryAt <= DATEADD(MINUTE, 35, CASE WHEN ArrivalAt > ScheduledAt THEN ArrivalAt ELSE ScheduledAt END)
+                                THEN 1 ELSE 0
+                            END
+                        ) AS otc_ok
+                    FROM base
+                    GROUP BY (DATEPART(HOUR, COALESCE(DocumentDeliveryAt, ScheduledAt)) / 2) * 2
+                ),
+                ots_bucket AS (
+                    SELECT
+                        (DATEPART(HOUR, COALESCE(ProcessEndAt, ScheduledAt)) / 2) * 2 AS bucket_start_hour,
+                        SUM(
+                            CASE
+                                WHEN ProcessStartAt IS NOT NULL
+                                 AND ProcessEndAt IS NOT NULL
+                                 AND StandardTimeMinutes > 0
+                                 AND Status IN ('PARA_FIRMAR', 'FINALIZADO', 'ATENDIDA')
+                                THEN 1 ELSE 0
+                            END
+                        ) AS ots_total,
+                        SUM(
+                            CASE
+                                WHEN ProcessStartAt IS NOT NULL
+                                 AND ProcessEndAt IS NOT NULL
+                                 AND StandardTimeMinutes > 0
+                                 AND Status IN ('PARA_FIRMAR', 'FINALIZADO', 'ATENDIDA')
+                                 AND DATEDIFF(MINUTE, ProcessStartAt, ProcessEndAt) <= StandardTimeMinutes
+                                THEN 1 ELSE 0
+                            END
+                        ) AS ots_ok
+                    FROM base
+                    GROUP BY (DATEPART(HOUR, COALESCE(ProcessEndAt, ScheduledAt)) / 2) * 2
+                )
+                SELECT
+                    h.bucket_start_hour,
+                    CASE WHEN COALESCE(o.otc_total, 0) > 0 THEN CAST((o.otc_ok * 100.0) / o.otc_total AS FLOAT) ELSE 0 END AS otc_rate,
+                    CASE WHEN COALESCE(s.ots_total, 0) > 0 THEN CAST((s.ots_ok * 100.0) / s.ots_total AS FLOAT) ELSE 0 END AS ots_rate
+                FROM (
+                    VALUES (0),(2),(4),(6),(8),(10),(12),(14),(16),(18),(20),(22)
+                ) AS h(bucket_start_hour)
+                LEFT JOIN otc_bucket o ON o.bucket_start_hour = h.bucket_start_hour
+                LEFT JOIN ots_bucket s ON s.bucket_start_hour = h.bucket_start_hour
+                ORDER BY h.bucket_start_hour
+                """
+            ),
+            {"date_from": date_from, "date_to": date_to},
+        )
+        rows = [dict(row) for row in result.mappings().all()]
+        bucket_map = {
+            int(row["bucket_start_hour"]): {
+                "otcRate": round(float(row["otc_rate"]), 2) if row.get("otc_rate") is not None else None,
+                "otsRate": round(float(row["ots_rate"]), 2) if row.get("ots_rate") is not None else None,
+            }
+            for row in rows
+        }
+        buckets: list[dict] = []
+        for hour in range(0, 24, 2):
+            label = f"{hour:02d}:00"
+            value = bucket_map.get(hour, {})
+            otc = value.get("otcRate", 0)
+            ots = value.get("otsRate", 0)
+            buckets.append({"label": label, "hour": hour, "otcRate": otc, "otsRate": ots})
+        return {"timezone": "America/Bogota", "buckets": buckets}
+
+    async def get_operator_performance(self, date_from=None, date_to=None) -> dict:
+        params = {"date_from": date_from, "date_to": date_to}
+        result = await self.session.execute(
+            text(
+                self._dashboard_base_sql()
+                + """
+                , operator_source AS (
+                    SELECT
+                        src.AppointmentId,
+                        src.OperatorId
+                    FROM (
+                        SELECT
+                            ao.AppointmentId,
+                            ao.OperatorId
+                        FROM dbo.tbl_AppointmentOperator ao
+                        WHERE ao.IsActive = 1
+                        UNION ALL
+                        SELECT
+                            ao.AppointmentId,
+                            ao.OperatorId
+                        FROM dbo.tbl_AppointmentOperator ao
+                        WHERE ao.IsActive = 0
+                          AND NOT EXISTS (
+                              SELECT 1
+                              FROM dbo.tbl_AppointmentOperator active_ao
+                              WHERE active_ao.AppointmentId = ao.AppointmentId
+                                AND active_ao.IsActive = 1
+                          )
+                          AND ao.ReleasedAt = (
+                              SELECT MAX(last_ao.ReleasedAt)
+                              FROM dbo.tbl_AppointmentOperator last_ao
+                              WHERE last_ao.AppointmentId = ao.AppointmentId
+                                AND last_ao.IsActive = 0
+                          )
+                    ) src
+                    GROUP BY src.AppointmentId, src.OperatorId
+                ),
+                appointment_ots AS (
+                    SELECT
+                        b.Id AS AppointmentId,
+                        CASE
+                            WHEN b.Status IN ('PARA_FIRMAR', 'FINALIZADO', 'ATENDIDA')
+                              AND b.ProcessStartAt IS NOT NULL
+                              AND b.StandardTimeMinutes > 0
+                            THEN 1
+                            ELSE 0
+                        END AS is_evaluable,
+                        CASE
+                            WHEN b.Status IN ('PARA_FIRMAR', 'FINALIZADO', 'ATENDIDA')
+                              AND b.ProcessStartAt IS NOT NULL
+                              AND b.StandardTimeMinutes > 0
+                              AND DATEDIFF(MINUTE, b.ProcessStartAt, COALESCE(b.ProcessEndAt, SYSUTCDATETIME())) <= b.StandardTimeMinutes
+                            THEN 1
+                            ELSE 0
+                        END AS is_compliant,
+                        CASE
+                            WHEN b.Status IN ('PARA_FIRMAR', 'FINALIZADO', 'ATENDIDA')
+                              AND b.ProcessStartAt IS NOT NULL
+                              AND b.StandardTimeMinutes > 0
+                            THEN DATEDIFF(MINUTE, b.ProcessStartAt, COALESCE(b.ProcessEndAt, SYSUTCDATETIME()))
+                            ELSE 0
+                        END AS executed_minutes
+                    FROM base b
+                )
+                SELECT
+                    o.Id AS operatorId,
+                    o.Name AS operatorName,
+                    o.OperatorLevel AS operatorLevel,
+                    SUM(ao_ots.executed_minutes) AS executedMinutes,
+                    SUM(CASE WHEN ao_ots.is_evaluable = 1 THEN 1 ELSE 0 END) AS totalOperations,
+                    SUM(CASE WHEN ao_ots.is_evaluable = 1 AND ao_ots.is_compliant = 1 THEN 1 ELSE 0 END) AS compliantOperations
+                FROM operator_source os
+                INNER JOIN appointment_ots ao_ots ON ao_ots.AppointmentId = os.AppointmentId
+                INNER JOIN dbo.tbl_Operator o ON o.Id = os.OperatorId
+                GROUP BY o.Id, o.Name, o.OperatorLevel
+                HAVING SUM(CASE WHEN ao_ots.is_evaluable = 1 THEN 1 ELSE 0 END) > 0
+                ORDER BY
+                    CAST(SUM(CASE WHEN ao_ots.is_evaluable = 1 AND ao_ots.is_compliant = 1 THEN 1 ELSE 0 END) AS FLOAT)
+                    / NULLIF(CAST(SUM(CASE WHEN ao_ots.is_evaluable = 1 THEN 1 ELSE 0 END) AS FLOAT), 0) DESC,
+                    SUM(ao_ots.executed_minutes) DESC,
+                    o.Name ASC
+                """
+            ),
+            params,
+        )
+        rows = [dict(row) for row in result.mappings().all()]
+        items: list[dict] = []
+        for row in rows:
+            total_operations = int(row.get("totalOperations") or 0)
+            compliant_operations = int(row.get("compliantOperations") or 0)
+            ots_rate = round((compliant_operations * 100.0 / total_operations), 2) if total_operations else 0.0
+            items.append(
+                {
+                    "operatorId": int(row["operatorId"]),
+                    "name": row["operatorName"],
+                    "role": "Senior" if row.get("operatorLevel") == "SENIOR" else "Junior",
+                    "executedMinutes": int(row.get("executedMinutes") or 0),
+                    "totalOperations": total_operations,
+                    "compliantOperations": compliant_operations,
+                    "otsRate": ots_rate,
+                }
+            )
+        return {"items": items}
+
     async def get_active_operator_ids_by_level(self, appointment_id: int) -> dict[str, list[int]]:
         result = await self.session.execute(
             text(
@@ -116,8 +326,8 @@ class AppointmentRepositoryQueriesMixin:
                     ) AS retrasada,
                     SUM(CASE WHEN ArrivalAt IS NOT NULL AND ScheduledAt IS NOT NULL THEN 1 ELSE 0 END) AS on_time_candidates,
                     SUM(CASE WHEN ArrivalAt IS NOT NULL AND ScheduledAt IS NOT NULL AND ArrivalAt <= DATEADD(MINUTE, 15, ScheduledAt) THEN 1 ELSE 0 END) AS on_time_arrivals,
-                    SUM(CASE WHEN ProcessStartAt IS NOT NULL AND ProcessEndAt IS NOT NULL AND StandardTimeMinutes > 0 THEN 1 ELSE 0 END) AS ots_total,
-                    SUM(CASE WHEN ProcessStartAt IS NOT NULL AND ProcessEndAt IS NOT NULL AND StandardTimeMinutes > 0 AND DATEDIFF(MINUTE, ProcessStartAt, ProcessEndAt) <= StandardTimeMinutes THEN 1 ELSE 0 END) AS ots_compliant,
+                    SUM(CASE WHEN Status IN ('PARA_FIRMAR', 'FINALIZADO', 'ATENDIDA') AND ProcessStartAt IS NOT NULL AND ProcessEndAt IS NOT NULL AND StandardTimeMinutes > 0 THEN 1 ELSE 0 END) AS ots_total,
+                    SUM(CASE WHEN Status IN ('PARA_FIRMAR', 'FINALIZADO', 'ATENDIDA') AND ProcessStartAt IS NOT NULL AND ProcessEndAt IS NOT NULL AND StandardTimeMinutes > 0 AND DATEDIFF(MINUTE, ProcessStartAt, ProcessEndAt) <= StandardTimeMinutes THEN 1 ELSE 0 END) AS ots_compliant,
                     SUM(
                         CASE
                             WHEN ArrivalAt IS NOT NULL

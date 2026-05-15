@@ -175,7 +175,7 @@ export function DockCard({
                 ))}
               </ul>
             ) : (
-              <p className="text-xs font-medium text-warning-700">Sin junior asignado</p>
+              <p className="text-xs font-medium text-warning-700">-</p>
             )}
           </div>
         </div>

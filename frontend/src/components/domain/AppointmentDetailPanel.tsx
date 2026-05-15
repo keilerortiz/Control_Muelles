@@ -83,6 +83,19 @@ function DetailField({ label, value, icon: Icon }: DetailFieldProps) {
   );
 }
 
+function getKilosMovidosValue(appointment: AppointmentDetail): unknown {
+  const record = appointment as Record<string, unknown>;
+  return (
+    record.MovedWeightKg
+    ?? record.movedWeightKg
+    ?? record.KilosMovidos
+    ?? record.kilosMovidos
+    ?? record.Kilos_Movidos
+    ?? record.kilos_movidos
+    ?? null
+  );
+}
+
 export function AppointmentDetailPanel({
   appointment,
   statusLog = [],
@@ -277,6 +290,7 @@ export function AppointmentDetailPanel({
             <DetailField label="Muelle" value={appointment.DockName} icon={Warehouse} />
             <DetailField label="Precintos" value={appointment.Precincts} icon={FileCheck} />
             <DetailField label="Observaciones" value={appointment.NonComplianceComment} icon={FileCheck} />
+            <DetailField label="Kilos movidos" value={getKilosMovidosValue(appointment)} icon={FileCheck} />
             <DetailField label="Senior's" value={appointment.SeniorOperators} icon={FileCheck} />
             <DetailField label="Junior's" value={appointment.JuniorOperators} icon={FileCheck} />
           </div>

@@ -65,3 +65,29 @@ export const dashboardSummarySchema = z.object({
     }).passthrough(),
   ).optional(),
 }).passthrough();
+
+export const dashboardKpisTimelineSchema = z.object({
+  timezone: z.string(),
+  buckets: z.array(
+    z.object({
+      label: z.string(),
+      hour: z.number(),
+      otcRate: z.number().nullable().optional(),
+      otsRate: z.number().nullable().optional(),
+    }),
+  ),
+});
+
+export const operatorPerformanceSchema = z.object({
+  items: z.array(
+    z.object({
+      operatorId: z.number(),
+      name: z.string(),
+      role: z.union([z.literal("Senior"), z.literal("Junior")]),
+      executedMinutes: z.number(),
+      totalOperations: z.number(),
+      compliantOperations: z.number(),
+      otsRate: z.number(),
+    }),
+  ),
+});

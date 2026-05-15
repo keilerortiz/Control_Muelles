@@ -21,6 +21,31 @@ export interface ConsultorOperatorMetric {
   otsRate: number;
 }
 
+function getRowStatus(row: ConsultorAppointmentRow): string {
+  const record = row as Record<string, unknown>;
+  return String(
+    record.Status
+    ?? record.status
+    ?? record.AppointmentStatus
+    ?? record.appointmentStatus
+    ?? "",
+  ).toUpperCase();
+}
+
+function getStandardMinutes(row: ConsultorAppointmentRow): number {
+  const record = row as Record<string, unknown>;
+  const raw =
+    record.StandardTimeMinutes
+    ?? record.standardTimeMinutes
+    ?? record.StandardMinutes
+    ?? record.standardMinutes
+    ?? record.OperationStandardMinutes
+    ?? record.operationStandardMinutes
+    ?? 0;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : 0;
+}
+
 function splitOperatorNames(value: unknown): string[] {
   return String(value || "")
     .split(",")
@@ -29,10 +54,12 @@ function splitOperatorNames(value: unknown): string[] {
 }
 
 export function buildConsultorMetrics(rows: ConsultorAppointmentRow[] = []) {
-  const totalVolume = rows.reduce(
-    (accumulator, row) => accumulator + Number(row.MovedWeightKg || row.EstimatedTons || 0),
-    0,
-  );
+  const nowMs = Date.now();
+  const totalMovedWeightKg = rows.reduce((accumulator, row) => {
+    const movedWeightKg = Number(row.MovedWeightKg || 0);
+    return accumulator + (Number.isFinite(movedWeightKg) ? movedWeightKg : 0);
+  }, 0);
+  const totalVolumeTon = totalMovedWeightKg / 1000;
 
   const nonCompliances = rows.filter((row) => {
     if (row.OtcNonComplianceReason || row.OtsNonComplianceReason || row.NonComplianceComment) return true;
@@ -48,16 +75,29 @@ export function buildConsultorMetrics(rows: ConsultorAppointmentRow[] = []) {
   >((accumulator, row) => {
     const startedAt = row.ProcessStartAt ? new Date(row.ProcessStartAt) : null;
     const endedAt = row.ProcessEndAt ? new Date(row.ProcessEndAt) : null;
-    const hasDuration = startedAt && endedAt;
-    const elapsedMinutes = hasDuration ? Math.max((endedAt.getTime() - startedAt.getTime()) / 60000, 0) : 0;
-    const standardMinutes = Number(row.StandardTimeMinutes || 0);
-    const isCompliant = Boolean(hasDuration && standardMinutes > 0 && elapsedMinutes <= standardMinutes);
+    const hasStart = Boolean(startedAt && !Number.isNaN(startedAt.getTime()));
+    const hasEnd = Boolean(endedAt && !Number.isNaN(endedAt.getTime()));
+    const effectiveEndMs = hasEnd && endedAt ? endedAt.getTime() : nowMs;
+    const elapsedMinutes = hasStart && startedAt
+      ? Math.max((effectiveEndMs - startedAt.getTime()) / 60000, 0)
+      : 0;
+    const standardMinutes = getStandardMinutes(row);
+    const hasOtsNonCompliance = Boolean(String(row.OtsNonComplianceReason || "").trim());
+    const status = getRowStatus(row);
+    const isParaFirmar = status === "PARA_FIRMAR";
+    const isClosedStatus = status === "FINALIZADO" || status === "ATENDIDA";
+    const isEvaluableStatus = isParaFirmar || isClosedStatus;
+    const hasEvaluableOtsResult = isEvaluableStatus && hasStart && standardMinutes > 0;
+    const isCompliantByTime = hasEvaluableOtsResult ? elapsedMinutes <= standardMinutes : false;
+    const isCompliant = hasOtsNonCompliance ? false : isCompliantByTime;
     const registerOperator = (name: string, role: "Senior" | "Junior") => {
       const key = `${role}:${name}`;
       const current = accumulator[key] || { name, role, executedMinutes: 0, compliant: 0, total: 0 };
       current.executedMinutes += elapsedMinutes;
-      current.total += 1;
-      if (isCompliant) current.compliant += 1;
+      if (hasEvaluableOtsResult) {
+        current.total += 1;
+        if (isCompliant) current.compliant += 1;
+      }
       accumulator[key] = current;
     };
     splitOperatorNames(row.SeniorOperators).forEach((name) => registerOperator(name, "Senior"));
@@ -80,7 +120,7 @@ export function buildConsultorMetrics(rows: ConsultorAppointmentRow[] = []) {
   const bestOperator = operatorMetrics[0];
 
   return {
-    totalVolume: totalVolume.toFixed(1),
+    totalVolume: totalVolumeTon.toFixed(1),
     nonCompliances,
     bestOperario: bestOperator ? `${bestOperator.name} · ${bestOperator.otsRate}% OTS` : "Sin dato",
     operatorMetrics,
