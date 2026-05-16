@@ -1,13 +1,23 @@
 from __future__ import annotations
-
 from datetime import UTC, datetime
-
+from typing import TYPE_CHECKING, Any, Callable, Awaitable
 from sqlalchemy.exc import DBAPIError
-
 from app.services.appointment_dev_store import DEV_APPOINTMENTS_STORE
+
+if TYPE_CHECKING:
+    from app.repositories.appointment_repository import AppointmentRepository
+    from app.services.appointment_service import AppointmentService
 
 
 class AppointmentServiceActionsMixin:
+    if TYPE_CHECKING:
+        repository: AppointmentRepository
+        _dev_mode: bool
+        def detail(self, appointment_id: int) -> Awaitable[dict]: ...
+        def _is_db_unavailable(self, exc: DBAPIError) -> bool: ...
+        def _map_db_error(self, exc: DBAPIError) -> AppError: ...
+        async def _broadcast_change(self, action: str, appointment_id: int, status: str | None, correlation_id: str, origin_client_id: str | None = None) -> None: ...
+        def _validate_operator_ids(self, payload: dict) -> list[int]: ...
     async def checkin(
         self,
         appointment_id: int,
@@ -46,6 +56,7 @@ class AppointmentServiceActionsMixin:
                 payload["candidatesVersion"],
                 user_id,
                 correlation_id,
+                version=payload.get("version"),
             ),
             lambda: DEV_APPOINTMENTS_STORE.assign(
                 appointment_id, payload["dockId"], operator_ids, payload["candidatesVersion"], user_id
@@ -73,6 +84,7 @@ class AppointmentServiceActionsMixin:
                 payload["candidatesVersion"],
                 user_id,
                 correlation_id,
+                version=payload.get("version"),
             ),
             lambda: DEV_APPOINTMENTS_STORE.reassign(
                 appointment_id, payload["dockId"], operator_ids, payload["candidatesVersion"], user_id
@@ -101,6 +113,7 @@ class AppointmentServiceActionsMixin:
                 payload["precincts"],
                 user_id,
                 correlation_id,
+                version=payload.get("version"),
             ),
             lambda: DEV_APPOINTMENTS_STORE.start_process(
                 appointment_id, now, now, payload["remissions"], payload["precincts"], user_id
@@ -111,6 +124,7 @@ class AppointmentServiceActionsMixin:
         self,
         appointment_id: int,
         process_end_at: datetime,
+        payload: dict,
         user_id: int,
         correlation_id: str,
         origin_client_id: str | None = None,
@@ -121,7 +135,7 @@ class AppointmentServiceActionsMixin:
             correlation_id,
             origin_client_id,
             lambda: self.repository.to_sign(
-                appointment_id, process_end_at, user_id, correlation_id
+                appointment_id, process_end_at, user_id, correlation_id, version=payload.get("version")
             ),
             lambda: DEV_APPOINTMENTS_STORE.to_sign(appointment_id, process_end_at, user_id),
         )
@@ -150,6 +164,7 @@ class AppointmentServiceActionsMixin:
         self,
         appointment_id: int,
         checkout_at: datetime,
+        payload: dict,
         user_id: int,
         correlation_id: str,
         origin_client_id: str | None = None,
@@ -159,7 +174,7 @@ class AppointmentServiceActionsMixin:
             appointment_id,
             correlation_id,
             origin_client_id,
-            lambda: self.repository.checkout(appointment_id, checkout_at, user_id, correlation_id),
+            lambda: self.repository.checkout(appointment_id, checkout_at, user_id, correlation_id, version=payload.get("version")),
             lambda: DEV_APPOINTMENTS_STORE.checkout(appointment_id, checkout_at, user_id),
         )
 
@@ -167,6 +182,7 @@ class AppointmentServiceActionsMixin:
         self,
         appointment_id: int,
         cancellation_reason: str,
+        payload: dict,
         user_id: int,
         correlation_id: str,
         origin_client_id: str | None = None,
@@ -177,7 +193,7 @@ class AppointmentServiceActionsMixin:
             correlation_id,
             origin_client_id,
             lambda: self.repository.cancel(
-                appointment_id, cancellation_reason, user_id, correlation_id
+                appointment_id, cancellation_reason, user_id, correlation_id, version=payload.get("version")
             ),
             lambda: DEV_APPOINTMENTS_STORE.cancel(appointment_id, cancellation_reason, user_id),
         )

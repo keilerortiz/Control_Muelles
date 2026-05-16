@@ -84,6 +84,27 @@ export function AppointmentActionModal({
     return { ...appointment, StandardTimeMinutes: businessRuleMinutes };
   }, [appointment, activeBusinessRuleMinutesByKey]);
 
+  const activeNonComplianceReasons = useMemo(
+    () => ((catalogsQuery.data?.nonComplianceReasons || []) as MasterRecord[]).filter((item) => item?.IsActive),
+    [catalogsQuery.data?.nonComplianceReasons],
+  );
+
+  const otcReasonOptions = useMemo(
+    () => activeNonComplianceReasons
+      .filter((item) => String(item.ReasonType || "").toUpperCase() === "OTC")
+      .map((item) => String(item.Name || "").trim())
+      .filter(Boolean),
+    [activeNonComplianceReasons],
+  );
+
+  const otsReasonOptions = useMemo(
+    () => activeNonComplianceReasons
+      .filter((item) => String(item.ReasonType || "").toUpperCase() === "OTS")
+      .map((item) => String(item.Name || "").trim())
+      .filter(Boolean),
+    [activeNonComplianceReasons],
+  );
+
   const updateValue = useCallback((key: string, value: string | number | boolean | number[] | string[]) => {
     setForm((current) => ({ ...current, [key]: value }));
   }, []);
@@ -193,6 +214,8 @@ export function AppointmentActionModal({
           candidatesLoading={candidatesLoading}
           form={form}
           juniorOperators={juniorOperators}
+          otcReasonOptions={otcReasonOptions}
+          otsReasonOptions={otsReasonOptions}
           seniorOperators={seniorOperators}
           toggleOperator={toggleOperator}
           updateValue={updateValue}

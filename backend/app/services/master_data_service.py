@@ -21,12 +21,15 @@ class MasterDataService:
                 "clients": await self.repository.list_clients(),
                 "vehicleTypes": await self.repository.list_vehicle_types(),
                 "operationTypes": await self.repository.list_operation_types(),
+                "docks": await self.repository.list_docks(),
+                "nonComplianceReasons": await self._list_non_compliance_reasons_safely(),
+                "operators": await self.repository.list_operators(),
                 "standards": await self.repository.list_standards(),
                 "businessRules": await self.repository.list_business_rules(),
                 "users": [self._normalize_user(row) for row in await self.repository.list_users()],
                 "roles": [{"value": role.value, "label": role.value.title()} for role in Role],
             }
-        except DBAPIError as exc:
+        except DBAPIError:
             if self._dev_mode:
                 return MASTER_DATA_DEV_STORE.list_catalogs()
             raise
@@ -83,6 +86,60 @@ class MasterDataService:
         return await self._execute_named(
             lambda: self.repository.deactivate_operation_type(item_id),
             lambda: MASTER_DATA_DEV_STORE.deactivate_named("operation_types", item_id),
+        )
+
+    async def create_dock(self, payload: dict) -> dict:
+        return await self._execute_named(
+            lambda: self.repository.create_dock(payload),
+            lambda: MASTER_DATA_DEV_STORE.create_named("docks", payload),
+        )
+
+    async def update_dock(self, item_id: int, payload: dict) -> dict:
+        return await self._execute_named(
+            lambda: self.repository.update_dock(item_id, payload),
+            lambda: MASTER_DATA_DEV_STORE.update_named("docks", item_id, payload),
+        )
+
+    async def delete_dock(self, item_id: int) -> dict:
+        return await self._execute_named(
+            lambda: self.repository.deactivate_dock(item_id),
+            lambda: MASTER_DATA_DEV_STORE.deactivate_named("docks", item_id),
+        )
+
+    async def create_non_compliance_reason(self, payload: dict) -> dict:
+        return await self._execute_named(
+            lambda: self.repository.create_non_compliance_reason(payload),
+            lambda: MASTER_DATA_DEV_STORE.create_non_compliance_reason(payload),
+        )
+
+    async def update_non_compliance_reason(self, item_id: int, payload: dict) -> dict:
+        return await self._execute_named(
+            lambda: self.repository.update_non_compliance_reason(item_id, payload),
+            lambda: MASTER_DATA_DEV_STORE.update_non_compliance_reason(item_id, payload),
+        )
+
+    async def delete_non_compliance_reason(self, item_id: int) -> dict:
+        return await self._execute_named(
+            lambda: self.repository.deactivate_non_compliance_reason(item_id),
+            lambda: MASTER_DATA_DEV_STORE.deactivate_non_compliance_reason(item_id),
+        )
+
+    async def create_operator(self, payload: dict) -> dict:
+        return await self._execute_named(
+            lambda: self.repository.create_operator(payload),
+            lambda: MASTER_DATA_DEV_STORE.create_operator(payload),
+        )
+
+    async def update_operator(self, item_id: int, payload: dict) -> dict:
+        return await self._execute_named(
+            lambda: self.repository.update_operator(item_id, payload),
+            lambda: MASTER_DATA_DEV_STORE.update_operator(item_id, payload),
+        )
+
+    async def delete_operator(self, item_id: int) -> dict:
+        return await self._execute_named(
+            lambda: self.repository.deactivate_operator(item_id),
+            lambda: MASTER_DATA_DEV_STORE.deactivate_operator(item_id),
         )
 
     async def create_standard(self, payload: dict) -> dict:
@@ -160,7 +217,7 @@ class MasterDataService:
 
         return await self._run_in_transaction(action)
 
-    async def _update_user_db(self, user_id: int, payload: dict) -> dict:
+    async def _update_user_db(self, user_id: int, payload: dict) -> dict | None:
         async def action() -> dict:
             if await self.repository.find_user_by_email(payload["email"], exclude_user_id=user_id):
                 raise AppError("Ya existe un usuario con ese correo", error_code="VALIDATION_ERROR", status_code=409)
@@ -180,7 +237,7 @@ class MasterDataService:
 
         return await self._run_in_transaction(action)
 
-    async def _delete_user_db(self, user_id: int) -> dict:
+    async def _delete_user_db(self, user_id: int) -> dict | None:
         async def action() -> dict:
             existing = await self.repository.get_user(user_id)
             if not existing:
@@ -196,7 +253,7 @@ class MasterDataService:
     async def _execute_named(self, primary_action: Callable[[], Awaitable[dict | None]], fallback_action: Callable[[], dict]) -> dict:
         try:
             result = await self._run_in_transaction(primary_action)
-        except DBAPIError as exc:
+        except DBAPIError:
             if self._dev_mode:
                 return fallback_action()
             raise
@@ -204,10 +261,12 @@ class MasterDataService:
             raise NotFoundError("Registro no encontrado")
         return result
 
-    async def _run_user_mutation(self, primary_action: Callable[[], Awaitable[dict]], fallback_action: Callable[[], dict]) -> dict:
+    async def _run_user_mutation(self, primary_action: Callable[[], Awaitable[dict | None]], fallback_action: Callable[[], dict]) -> dict:
         try:
             result = await primary_action()
         except DBAPIError:
+            if self._dev_mode:
+                return fallback_action()
             raise
         if not result:
             raise NotFoundError("Registro no encontrado")
@@ -220,6 +279,14 @@ class MasterDataService:
             **row,
             "roleCodes": [role for role in (row.get("Roles") or "").split(",") if role],
         }
+
+    async def _list_non_compliance_reasons_safely(self) -> list[dict]:
+        try:
+            return await self.repository.list_non_compliance_reasons()
+        except DBAPIError:
+            if self._dev_mode:
+                return MASTER_DATA_DEV_STORE.list_catalogs().get("nonComplianceReasons", [])
+            return []
 
     async def _run_in_transaction(self, action: Callable[[], Awaitable[dict | None]]) -> dict | None:
         if self.repository.session.in_transaction():

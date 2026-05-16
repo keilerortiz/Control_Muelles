@@ -102,10 +102,10 @@ export function Topbar({ onMenuClick, menuButtonRef }: TopbarProps) {
 
         <Badge status={syncState} className="hidden sm:inline-flex">
           {syncState === "CONNECTED"
-            ? "Live"
+            ? "En vivo"
             : syncState === "CONNECTING" || syncState === "RECONNECTING"
-            ? "Connecting..."
-            : "Offline"}
+              ? "Conectando..."
+              : "Sin conexión"}
         </Badge>
 
         <div className="flex items-center gap-2 sm:hidden">
@@ -135,9 +135,8 @@ export function Topbar({ onMenuClick, menuButtonRef }: TopbarProps) {
             </span>
             <ChevronDown
               strokeWidth={1.5}
-              className={`hidden h-4 w-4 text-neutral-400 transition-transform sm:block ${
-                isUserMenuOpen ? "rotate-180" : ""
-              }`}
+              className={`hidden h-4 w-4 text-neutral-400 transition-transform sm:block ${isUserMenuOpen ? "rotate-180" : ""
+                }`}
             />
           </button>
 

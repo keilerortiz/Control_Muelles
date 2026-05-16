@@ -4,6 +4,10 @@ CREATE OR ALTER PROCEDURE dbo.usp_CreateAppointment
     @VehicleTypeId INT,
     @EstimatedTons DECIMAL(18,2),
     @ScheduledAt DATETIME2,
+    @DriverName NVARCHAR(150) = NULL,
+    @DriverDocument NVARCHAR(80) = NULL,
+    @VehiclePlate NVARCHAR(20) = NULL,
+    @NonComplianceComment NVARCHAR(1000) = NULL,
     @CreatedBy INT,
     @CorrelationId UNIQUEIDENTIFIER = NULL,
     @AppointmentId INT OUTPUT
@@ -14,7 +18,7 @@ BEGIN
     BEGIN TRY
         BEGIN TRANSACTION;
 
-        IF @ScheduledAt <= GETUTCDATE() THROW 50001, 'INVALID_DATE', 1;
+        IF @ScheduledAt <= SYSUTCDATETIME() THROW 50001, 'INVALID_DATE', 1;
         IF @EstimatedTons <= 0 THROW 50002, 'VALIDATION_ERROR', 1;
 
         IF NOT EXISTS (SELECT 1 FROM dbo.tbl_Client WHERE Id = @ClientId AND IsActive = 1)
@@ -34,10 +38,10 @@ BEGIN
             THROW 50013, 'VALIDATION_ERROR|INVALID_CONFIGURATION', 1;
 
         INSERT INTO dbo.tbl_Appointment (
-            ClientId, OperationTypeId, VehicleTypeId, EstimatedTons, Status, ScheduledAt, CreatedBy
+            ClientId, OperationTypeId, VehicleTypeId, EstimatedTons, Status, ScheduledAt, DriverName, DriverDocument, VehiclePlate, NonComplianceComment, CreatedBy
         )
         VALUES (
-            @ClientId, @OperationTypeId, @VehicleTypeId, @EstimatedTons, 'AGENDADA', @ScheduledAt, @CreatedBy
+            @ClientId, @OperationTypeId, @VehicleTypeId, @EstimatedTons, 'AGENDADA', @ScheduledAt, @DriverName, @DriverDocument, @VehiclePlate, @NonComplianceComment, @CreatedBy
         );
 
         SET @AppointmentId = SCOPE_IDENTITY();

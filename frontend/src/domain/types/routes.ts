@@ -1,6 +1,5 @@
 export type PrivateRoutePath =
   | "/consultor"
-  | "/consultor/citas"
   | "/admin"
   | "/planeador"
   | "/supervisor"

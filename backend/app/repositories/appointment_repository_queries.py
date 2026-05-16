@@ -19,6 +19,8 @@ class AppointmentRepositoryQueriesMixin:
                         a.DocumentDeliveryAt,
                         a.ProcessStartAt,
                         a.ProcessEndAt,
+                        COALESCE(a.DocumentDeliveryAt, a.ScheduledAt) AT TIME ZONE 'UTC' AT TIME ZONE 'SA Pacific Standard Time' AS OtcBucketAt,
+                        COALESCE(a.ProcessEndAt, a.ScheduledAt) AT TIME ZONE 'UTC' AT TIME ZONE 'SA Pacific Standard Time' AS OtsBucketAt,
                         COALESCE(s.StandardTimeMinutes, ot.StandardTimeMinutes) AS StandardTimeMinutes
                     FROM dbo.tbl_Appointment a
                     INNER JOIN dbo.tbl_OperationType ot ON ot.Id = a.OperationTypeId
@@ -34,7 +36,7 @@ class AppointmentRepositoryQueriesMixin:
                 ),
                 otc_bucket AS (
                     SELECT
-                        (DATEPART(HOUR, COALESCE(DocumentDeliveryAt, ScheduledAt)) / 2) * 2 AS bucket_start_hour,
+                        (DATEPART(HOUR, OtcBucketAt) / 2) * 2 AS bucket_start_hour,
                         SUM(
                             CASE
                                 WHEN ArrivalAt IS NOT NULL
@@ -54,11 +56,11 @@ class AppointmentRepositoryQueriesMixin:
                             END
                         ) AS otc_ok
                     FROM base
-                    GROUP BY (DATEPART(HOUR, COALESCE(DocumentDeliveryAt, ScheduledAt)) / 2) * 2
+                    GROUP BY (DATEPART(HOUR, OtcBucketAt) / 2) * 2
                 ),
                 ots_bucket AS (
                     SELECT
-                        (DATEPART(HOUR, COALESCE(ProcessEndAt, ScheduledAt)) / 2) * 2 AS bucket_start_hour,
+                        (DATEPART(HOUR, OtsBucketAt) / 2) * 2 AS bucket_start_hour,
                         SUM(
                             CASE
                                 WHEN ProcessStartAt IS NOT NULL
@@ -79,7 +81,7 @@ class AppointmentRepositoryQueriesMixin:
                             END
                         ) AS ots_ok
                     FROM base
-                    GROUP BY (DATEPART(HOUR, COALESCE(ProcessEndAt, ScheduledAt)) / 2) * 2
+                    GROUP BY (DATEPART(HOUR, OtsBucketAt) / 2) * 2
                 )
                 SELECT
                     h.bucket_start_hour,
@@ -216,6 +218,491 @@ class AppointmentRepositoryQueriesMixin:
             )
         return {"items": items}
 
+    async def get_logistics_dashboard(self, date_from=None, date_to=None) -> dict:
+        params = {"date_from": date_from, "date_to": date_to}
+        summary_result = await self.session.execute(
+            text(
+                """
+                WITH base AS (
+                    SELECT
+                        a.Id,
+                        a.Status,
+                        a.ScheduledAt,
+                        a.ArrivalAt,
+                        a.DocumentDeliveryAt,
+                        a.ProcessStartAt,
+                        a.ProcessEndAt,
+                        a.FinalizedAt,
+                        a.CheckoutAt,
+                        a.MovedWeightKg,
+                        COALESCE(s.StandardTimeMinutes, ot.StandardTimeMinutes) AS StandardTimeMinutes
+                    FROM dbo.tbl_Appointment a
+                    INNER JOIN dbo.tbl_OperationType ot ON ot.Id = a.OperationTypeId
+                    LEFT JOIN dbo.tbl_BusinessRule br
+                        ON br.ClientId = a.ClientId
+                       AND br.OperationTypeId = a.OperationTypeId
+                       AND br.VehicleTypeId = a.VehicleTypeId
+                       AND br.IsActive = 1
+                    LEFT JOIN dbo.tbl_Standard s ON s.Id = br.StandardId AND s.IsActive = 1
+                    WHERE a.IsDeleted = 0
+                      AND (:date_from IS NULL OR COALESCE(a.ProcessStartAt, a.ScheduledAt) >= :date_from)
+                      AND (:date_to IS NULL OR COALESCE(a.ProcessStartAt, a.ScheduledAt) <= :date_to)
+                )
+                SELECT
+                    SUM(CASE WHEN Status = 'AGENDADA' THEN 1 ELSE 0 END) AS scheduledVehicles,
+                    SUM(CASE WHEN Status = 'EN_PATIO' THEN 1 ELSE 0 END) AS inYardVehicles,
+                    SUM(CASE WHEN Status = 'ENTREGA_DOCUMENTOS' THEN 1 ELSE 0 END) AS documentDeliveryVehicles,
+                    SUM(CASE WHEN Status = 'EN_PROCESO' THEN 1 ELSE 0 END) AS inProcessVehicles,
+                    SUM(CASE WHEN Status = 'PARA_FIRMAR' THEN 1 ELSE 0 END) AS toSignVehicles,
+                    SUM(CASE WHEN Status = 'FINALIZADO' THEN 1 ELSE 0 END) AS finalizedVehicles,
+                    SUM(CASE WHEN Status = 'ATENDIDA' THEN 1 ELSE 0 END) AS attendedVehicles,
+                    SUM(CASE WHEN Status = 'OPERACION_CANCELADA' THEN 1 ELSE 0 END) AS cancelledVehicles,
+                    COALESCE(SUM(CAST(MovedWeightKg AS FLOAT)), 0) AS movedWeightKg,
+                    SUM(CASE WHEN ArrivalAt IS NOT NULL AND ScheduledAt IS NOT NULL THEN 1 ELSE 0 END) AS arrivalCandidates,
+                    SUM(CASE WHEN ArrivalAt IS NOT NULL AND ScheduledAt IS NOT NULL AND ArrivalAt <= DATEADD(MINUTE, 15, ScheduledAt) THEN 1 ELSE 0 END) AS onTimeArrivals,
+                    SUM(CASE WHEN ArrivalAt IS NOT NULL AND ScheduledAt IS NOT NULL AND ArrivalAt <= DATEADD(MINUTE, 15, ScheduledAt) AND DocumentDeliveryAt IS NOT NULL THEN 1 ELSE 0 END) AS otcTotal,
+                    SUM(CASE WHEN ArrivalAt IS NOT NULL AND ScheduledAt IS NOT NULL AND ArrivalAt <= DATEADD(MINUTE, 15, ScheduledAt) AND DocumentDeliveryAt IS NOT NULL AND DocumentDeliveryAt <= DATEADD(MINUTE, 35, CASE WHEN ArrivalAt > ScheduledAt THEN ArrivalAt ELSE ScheduledAt END) THEN 1 ELSE 0 END) AS otcCompliant,
+                    SUM(CASE WHEN Status IN ('PARA_FIRMAR', 'FINALIZADO', 'ATENDIDA') AND ProcessStartAt IS NOT NULL AND ProcessEndAt IS NOT NULL AND StandardTimeMinutes > 0 THEN 1 ELSE 0 END) AS otsTotal,
+                    SUM(CASE WHEN Status IN ('PARA_FIRMAR', 'FINALIZADO', 'ATENDIDA') AND ProcessStartAt IS NOT NULL AND ProcessEndAt IS NOT NULL AND StandardTimeMinutes > 0 AND DATEDIFF(MINUTE, ProcessStartAt, ProcessEndAt) <= StandardTimeMinutes THEN 1 ELSE 0 END) AS otsCompliant,
+                    SUM(CASE WHEN Status = 'EN_PROCESO' AND ProcessStartAt IS NOT NULL AND StandardTimeMinutes > 0 AND DATEDIFF(MINUTE, ProcessStartAt, SYSUTCDATETIME()) >= CAST(StandardTimeMinutes * 0.8 AS INT) THEN 1 ELSE 0 END) AS riskOperations,
+                    AVG(CASE WHEN ArrivalAt IS NOT NULL AND CheckoutAt IS NOT NULL THEN CAST(DATEDIFF(MINUTE, ArrivalAt, CheckoutAt) AS FLOAT) END) AS averageTotalStayMinutes,
+                    SUM(CASE WHEN Status = 'OPERACION_CANCELADA' THEN 1 ELSE 0 END) AS cancelledOperations
+                FROM base
+                """
+            ),
+            params,
+        )
+        summary_row = dict(summary_result.mappings().one())
+
+        status_result = await self.session.execute(
+            text(
+                """
+                WITH base AS (
+                    SELECT Id
+                    FROM dbo.tbl_Appointment a
+                    WHERE a.IsDeleted = 0
+                      AND (:date_from IS NULL OR COALESCE(a.ProcessStartAt, a.ScheduledAt) >= :date_from)
+                      AND (:date_to IS NULL OR COALESCE(a.ProcessStartAt, a.ScheduledAt) <= :date_to)
+                ),
+                status_counts AS (
+                    SELECT a.Status, COUNT(1) AS total
+                    FROM dbo.tbl_Appointment a
+                    INNER JOIN base b ON b.Id = a.Id
+                    GROUP BY a.Status
+                )
+                SELECT stage.status, stage.label, COALESCE(sc.total, 0) AS total
+                FROM (
+                    VALUES
+                        ('AGENDADA', 'Programadas'),
+                        ('EN_PATIO', 'En patio'),
+                        ('ENTREGA_DOCUMENTOS', 'Entrega docs'),
+                        ('EN_PROCESO', 'En proceso'),
+                        ('PARA_FIRMAR', 'Para firmar'),
+                        ('FINALIZADO', 'Finalizadas'),
+                        ('ATENDIDA', 'Atendidas')
+                ) AS stage(status, label)
+                LEFT JOIN status_counts sc ON sc.Status = stage.status
+                """
+            ),
+            params,
+        )
+        status_funnel = [dict(row) for row in status_result.mappings().all()]
+
+        durations_result = await self.session.execute(
+            text(
+                """
+                WITH base AS (
+                    SELECT Id
+                    FROM dbo.tbl_Appointment a
+                    WHERE a.IsDeleted = 0
+                      AND (:date_from IS NULL OR COALESCE(a.ProcessStartAt, a.ScheduledAt) >= :date_from)
+                      AND (:date_to IS NULL OR COALESCE(a.ProcessStartAt, a.ScheduledAt) <= :date_to)
+                ),
+                transitions AS (
+                    SELECT
+                        b.Id AS AppointmentId,
+                        MAX(CASE WHEN l.NewStatus = 'EN_PATIO' THEN l.ChangedAt END) AS en_patio_at,
+                        MAX(CASE WHEN l.NewStatus = 'ENTREGA_DOCUMENTOS' THEN l.ChangedAt END) AS entrega_documentos_at,
+                        MAX(CASE WHEN l.NewStatus = 'EN_PROCESO' THEN l.ChangedAt END) AS en_proceso_at,
+                        MAX(CASE WHEN l.NewStatus = 'PARA_FIRMAR' THEN l.ChangedAt END) AS para_firmar_at,
+                        MAX(CASE WHEN l.NewStatus = 'FINALIZADO' THEN l.ChangedAt END) AS finalizado_at,
+                        MAX(CASE WHEN l.NewStatus = 'ATENDIDA' THEN l.ChangedAt END) AS atendida_at
+                    FROM base b
+                    INNER JOIN dbo.tbl_AppointmentStatusLog l ON l.AppointmentId = b.Id
+                    GROUP BY b.Id
+                ),
+                metric_source AS (
+                    SELECT 'assignment' AS code, 'Asignación' AS label, DATEDIFF(MINUTE, en_patio_at, entrega_documentos_at) AS minutes FROM transitions WHERE en_patio_at IS NOT NULL AND entrega_documentos_at IS NOT NULL
+                    UNION ALL
+                    SELECT 'documents', 'Entrega documentos', DATEDIFF(MINUTE, entrega_documentos_at, en_proceso_at) FROM transitions WHERE entrega_documentos_at IS NOT NULL AND en_proceso_at IS NOT NULL
+                    UNION ALL
+                    SELECT 'process', 'Proceso', DATEDIFF(MINUTE, en_proceso_at, para_firmar_at) FROM transitions WHERE en_proceso_at IS NOT NULL AND para_firmar_at IS NOT NULL
+                    UNION ALL
+                    SELECT 'signing', 'Para firmar', DATEDIFF(MINUTE, para_firmar_at, finalizado_at) FROM transitions WHERE para_firmar_at IS NOT NULL AND finalizado_at IS NOT NULL
+                    UNION ALL
+                    SELECT 'stay', 'Tiempo de permanencia', DATEDIFF(MINUTE, finalizado_at, atendida_at) FROM transitions WHERE finalizado_at IS NOT NULL AND atendida_at IS NOT NULL
+                )
+                SELECT
+                    code,
+                    label,
+                    COUNT(1) AS sampleSize,
+                    AVG(CAST(CASE WHEN minutes < 0 THEN 0 ELSE minutes END AS FLOAT)) AS averageMinutes
+                FROM metric_source
+                GROUP BY code, label
+                """
+            ),
+            params,
+        )
+        duration_rows = [dict(row) for row in durations_result.mappings().all()]
+        duration_map = {row["code"]: row for row in duration_rows}
+        process_durations = []
+        for code, label in [
+            ("assignment", "Asignación"),
+            ("documents", "Entrega documentos"),
+            ("process", "Proceso"),
+            ("signing", "Para firmar"),
+            ("stay", "Tiempo de permanencia"),
+        ]:
+            row = duration_map.get(code, {})
+            average_minutes = row.get("averageMinutes")
+            process_durations.append(
+                {
+                    "code": code,
+                    "label": label,
+                    "averageMinutes": round(float(average_minutes), 2) if average_minutes is not None else None,
+                    "sampleSize": int(row.get("sampleSize") or 0),
+                }
+            )
+
+        senior_result = await self.session.execute(
+            text(
+                """
+                WITH base AS (
+                    SELECT
+                        a.Id,
+                        a.Status,
+                        a.ScheduledAt,
+                        a.ProcessStartAt,
+                        a.ProcessEndAt,
+                        COALESCE(s.StandardTimeMinutes, ot.StandardTimeMinutes) AS StandardTimeMinutes
+                    FROM dbo.tbl_Appointment a
+                    INNER JOIN dbo.tbl_OperationType ot ON ot.Id = a.OperationTypeId
+                    LEFT JOIN dbo.tbl_BusinessRule br
+                        ON br.ClientId = a.ClientId
+                       AND br.OperationTypeId = a.OperationTypeId
+                       AND br.VehicleTypeId = a.VehicleTypeId
+                       AND br.IsActive = 1
+                    LEFT JOIN dbo.tbl_Standard s ON s.Id = br.StandardId AND s.IsActive = 1
+                    WHERE a.IsDeleted = 0
+                      AND (:date_from IS NULL OR COALESCE(a.ProcessStartAt, a.ScheduledAt) >= :date_from)
+                      AND (:date_to IS NULL OR COALESCE(a.ProcessStartAt, a.ScheduledAt) <= :date_to)
+                ),
+                assigned AS (
+                    SELECT
+                        o.Id AS operatorId,
+                        o.Name AS operatorName,
+                        b.Id AS appointmentId,
+                        b.Status,
+                        b.ScheduledAt,
+                        b.ProcessStartAt,
+                        b.ProcessEndAt,
+                        b.StandardTimeMinutes,
+                        ao.AssignedAt,
+                        ao.ReleasedAt
+                    FROM base b
+                    INNER JOIN dbo.tbl_AppointmentOperator ao ON ao.AppointmentId = b.Id
+                    INNER JOIN dbo.tbl_Operator o ON o.Id = ao.OperatorId
+                    WHERE o.OperatorLevel = 'SENIOR'
+                ),
+                totals AS (
+                    SELECT
+                        operatorId,
+                        operatorName,
+                        SUM(CASE WHEN AssignedAt IS NOT NULL THEN DATEDIFF(MINUTE, AssignedAt, COALESCE(ReleasedAt, SYSUTCDATETIME())) ELSE 0 END) AS workedMinutes,
+                        SUM(CASE WHEN ProcessStartAt IS NOT NULL AND ProcessEndAt IS NOT NULL AND StandardTimeMinutes > 0 AND Status IN ('PARA_FIRMAR', 'FINALIZADO', 'ATENDIDA') THEN 1 ELSE 0 END) AS totalOperations,
+                        SUM(CASE WHEN ProcessStartAt IS NOT NULL AND ProcessEndAt IS NOT NULL AND StandardTimeMinutes > 0 AND Status IN ('PARA_FIRMAR', 'FINALIZADO', 'ATENDIDA') AND DATEDIFF(MINUTE, ProcessStartAt, ProcessEndAt) <= StandardTimeMinutes THEN 1 ELSE 0 END) AS compliantOperations
+                    FROM assigned
+                    GROUP BY operatorId, operatorName
+                )
+                SELECT
+                    operatorId,
+                    operatorName,
+                    workedMinutes,
+                    totalOperations,
+                    compliantOperations
+                FROM totals
+                ORDER BY totalOperations DESC, workedMinutes DESC, operatorName ASC
+                """
+            ),
+            params,
+        )
+        senior_rows = [dict(row) for row in senior_result.mappings().all()]
+
+        senior_buckets_result = await self.session.execute(
+            text(
+                """
+                WITH base AS (
+                    SELECT
+                        a.Id,
+                        a.Status,
+                        a.ScheduledAt,
+                        a.ProcessStartAt,
+                        a.ProcessEndAt,
+                        COALESCE(s.StandardTimeMinutes, ot.StandardTimeMinutes) AS StandardTimeMinutes
+                    FROM dbo.tbl_Appointment a
+                    INNER JOIN dbo.tbl_OperationType ot ON ot.Id = a.OperationTypeId
+                    LEFT JOIN dbo.tbl_BusinessRule br
+                        ON br.ClientId = a.ClientId
+                       AND br.OperationTypeId = a.OperationTypeId
+                       AND br.VehicleTypeId = a.VehicleTypeId
+                       AND br.IsActive = 1
+                    LEFT JOIN dbo.tbl_Standard s ON s.Id = br.StandardId AND s.IsActive = 1
+                    WHERE a.IsDeleted = 0
+                      AND (:date_from IS NULL OR COALESCE(a.ProcessStartAt, a.ScheduledAt) >= :date_from)
+                      AND (:date_to IS NULL OR COALESCE(a.ProcessStartAt, a.ScheduledAt) <= :date_to)
+                )
+                SELECT
+                    o.Id AS operatorId,
+                    (DATEPART(HOUR, COALESCE(b.ProcessEndAt, b.ScheduledAt) AT TIME ZONE 'UTC' AT TIME ZONE 'SA Pacific Standard Time') / 2) * 2 AS hour,
+                    SUM(CASE WHEN b.ProcessStartAt IS NOT NULL AND b.ProcessEndAt IS NOT NULL AND b.StandardTimeMinutes > 0 AND b.Status IN ('PARA_FIRMAR', 'FINALIZADO', 'ATENDIDA') THEN 1 ELSE 0 END) AS totalOperations,
+                    SUM(CASE WHEN b.ProcessStartAt IS NOT NULL AND b.ProcessEndAt IS NOT NULL AND b.StandardTimeMinutes > 0 AND b.Status IN ('PARA_FIRMAR', 'FINALIZADO', 'ATENDIDA') AND DATEDIFF(MINUTE, b.ProcessStartAt, b.ProcessEndAt) <= b.StandardTimeMinutes THEN 1 ELSE 0 END) AS compliantOperations
+                FROM base b
+                INNER JOIN dbo.tbl_AppointmentOperator ao ON ao.AppointmentId = b.Id
+                INNER JOIN dbo.tbl_Operator o ON o.Id = ao.OperatorId
+                WHERE o.OperatorLevel = 'SENIOR'
+                GROUP BY o.Id, (DATEPART(HOUR, COALESCE(b.ProcessEndAt, b.ScheduledAt) AT TIME ZONE 'UTC' AT TIME ZONE 'SA Pacific Standard Time') / 2) * 2
+                """
+            ),
+            params,
+        )
+        senior_bucket_map: dict[int, dict[int, dict]] = {}
+        for row in senior_buckets_result.mappings().all():
+            item = dict(row)
+            operator_id = int(item["operatorId"])
+            hour = int(item["hour"])
+            total_operations = int(item.get("totalOperations") or 0)
+            compliant_operations = int(item.get("compliantOperations") or 0)
+            senior_bucket_map.setdefault(operator_id, {})[hour] = {
+                "hour": hour,
+                "label": f"{hour:02d}:00",
+                "otsRate": round((compliant_operations * 100.0 / total_operations), 2) if total_operations else None,
+                "totalOperations": total_operations,
+            }
+
+        senior_operator_ots = []
+        for row in senior_rows:
+            operator_id = int(row["operatorId"])
+            total_operations = int(row.get("totalOperations") or 0)
+            compliant_operations = int(row.get("compliantOperations") or 0)
+            buckets_by_hour = senior_bucket_map.get(operator_id, {})
+            senior_operator_ots.append(
+                {
+                    "operatorId": operator_id,
+                    "name": row["operatorName"],
+                    "workedMinutes": int(row.get("workedMinutes") or 0),
+                    "totalOperations": total_operations,
+                    "compliantOperations": compliant_operations,
+                    "otsRate": round((compliant_operations * 100.0 / total_operations), 2) if total_operations else 0.0,
+                    "buckets": [
+                        buckets_by_hour.get(
+                            hour,
+                            {"hour": hour, "label": f"{hour:02d}:00", "otsRate": None, "totalOperations": 0},
+                        )
+                        for hour in range(0, 24, 2)
+                    ],
+                }
+            )
+
+        ots_by_client_result = await self.session.execute(
+            text(
+                """
+                WITH base AS (
+                    SELECT
+                        a.Id,
+                        c.Name AS clientName,
+                        a.Status,
+                        a.ProcessStartAt,
+                        a.ProcessEndAt,
+                        COALESCE(s.StandardTimeMinutes, ot.StandardTimeMinutes) AS StandardTimeMinutes
+                    FROM dbo.tbl_Appointment a
+                    INNER JOIN dbo.tbl_Client c ON c.Id = a.ClientId
+                    INNER JOIN dbo.tbl_OperationType ot ON ot.Id = a.OperationTypeId
+                    LEFT JOIN dbo.tbl_BusinessRule br
+                        ON br.ClientId = a.ClientId
+                       AND br.OperationTypeId = a.OperationTypeId
+                       AND br.VehicleTypeId = a.VehicleTypeId
+                       AND br.IsActive = 1
+                    LEFT JOIN dbo.tbl_Standard s ON s.Id = br.StandardId AND s.IsActive = 1
+                    WHERE a.IsDeleted = 0
+                      AND (:date_from IS NULL OR COALESCE(a.ProcessStartAt, a.ScheduledAt) >= :date_from)
+                      AND (:date_to IS NULL OR COALESCE(a.ProcessStartAt, a.ScheduledAt) <= :date_to)
+                )
+                SELECT
+                    clientName,
+                    SUM(CASE WHEN Status IN ('PARA_FIRMAR', 'FINALIZADO', 'ATENDIDA') AND ProcessStartAt IS NOT NULL AND ProcessEndAt IS NOT NULL AND StandardTimeMinutes > 0 THEN 1 ELSE 0 END) AS totalOperations,
+                    SUM(CASE WHEN Status IN ('PARA_FIRMAR', 'FINALIZADO', 'ATENDIDA') AND ProcessStartAt IS NOT NULL AND ProcessEndAt IS NOT NULL AND StandardTimeMinutes > 0 AND DATEDIFF(MINUTE, ProcessStartAt, ProcessEndAt) <= StandardTimeMinutes THEN 1 ELSE 0 END) AS compliantOperations
+                FROM base
+                GROUP BY clientName
+                HAVING SUM(CASE WHEN Status IN ('PARA_FIRMAR', 'FINALIZADO', 'ATENDIDA') AND ProcessStartAt IS NOT NULL AND ProcessEndAt IS NOT NULL AND StandardTimeMinutes > 0 THEN 1 ELSE 0 END) > 0
+                ORDER BY
+                    CAST(SUM(CASE WHEN Status IN ('PARA_FIRMAR', 'FINALIZADO', 'ATENDIDA') AND ProcessStartAt IS NOT NULL AND ProcessEndAt IS NOT NULL AND StandardTimeMinutes > 0 AND DATEDIFF(MINUTE, ProcessStartAt, ProcessEndAt) <= StandardTimeMinutes THEN 1 ELSE 0 END) AS FLOAT)
+                    / NULLIF(CAST(SUM(CASE WHEN Status IN ('PARA_FIRMAR', 'FINALIZADO', 'ATENDIDA') AND ProcessStartAt IS NOT NULL AND ProcessEndAt IS NOT NULL AND StandardTimeMinutes > 0 THEN 1 ELSE 0 END) AS FLOAT), 0) DESC,
+                    clientName ASC
+                """
+            ),
+            params,
+        )
+        ots_by_client = [
+            {
+                "name": row["clientName"],
+                "otsRate": round((int(row.get("compliantOperations") or 0) * 100.0 / int(row.get("totalOperations") or 1)), 2),
+                "totalOperations": int(row.get("totalOperations") or 0),
+            }
+            for row in ots_by_client_result.mappings().all()
+        ]
+
+        ots_by_operation_type_result = await self.session.execute(
+            text(
+                """
+                WITH base AS (
+                    SELECT
+                        a.Id,
+                        ot.Name AS operationTypeName,
+                        a.Status,
+                        a.ProcessStartAt,
+                        a.ProcessEndAt,
+                        COALESCE(s.StandardTimeMinutes, ot.StandardTimeMinutes) AS StandardTimeMinutes
+                    FROM dbo.tbl_Appointment a
+                    INNER JOIN dbo.tbl_OperationType ot ON ot.Id = a.OperationTypeId
+                    LEFT JOIN dbo.tbl_BusinessRule br
+                        ON br.ClientId = a.ClientId
+                       AND br.OperationTypeId = a.OperationTypeId
+                       AND br.VehicleTypeId = a.VehicleTypeId
+                       AND br.IsActive = 1
+                    LEFT JOIN dbo.tbl_Standard s ON s.Id = br.StandardId AND s.IsActive = 1
+                    WHERE a.IsDeleted = 0
+                      AND (:date_from IS NULL OR COALESCE(a.ProcessStartAt, a.ScheduledAt) >= :date_from)
+                      AND (:date_to IS NULL OR COALESCE(a.ProcessStartAt, a.ScheduledAt) <= :date_to)
+                )
+                SELECT
+                    operationTypeName,
+                    SUM(CASE WHEN Status IN ('PARA_FIRMAR', 'FINALIZADO', 'ATENDIDA') AND ProcessStartAt IS NOT NULL AND ProcessEndAt IS NOT NULL AND StandardTimeMinutes > 0 THEN 1 ELSE 0 END) AS totalOperations,
+                    SUM(CASE WHEN Status IN ('PARA_FIRMAR', 'FINALIZADO', 'ATENDIDA') AND ProcessStartAt IS NOT NULL AND ProcessEndAt IS NOT NULL AND StandardTimeMinutes > 0 AND DATEDIFF(MINUTE, ProcessStartAt, ProcessEndAt) <= StandardTimeMinutes THEN 1 ELSE 0 END) AS compliantOperations
+                FROM base
+                GROUP BY operationTypeName
+                HAVING SUM(CASE WHEN Status IN ('PARA_FIRMAR', 'FINALIZADO', 'ATENDIDA') AND ProcessStartAt IS NOT NULL AND ProcessEndAt IS NOT NULL AND StandardTimeMinutes > 0 THEN 1 ELSE 0 END) > 0
+                ORDER BY
+                    CAST(SUM(CASE WHEN Status IN ('PARA_FIRMAR', 'FINALIZADO', 'ATENDIDA') AND ProcessStartAt IS NOT NULL AND ProcessEndAt IS NOT NULL AND StandardTimeMinutes > 0 AND DATEDIFF(MINUTE, ProcessStartAt, ProcessEndAt) <= StandardTimeMinutes THEN 1 ELSE 0 END) AS FLOAT)
+                    / NULLIF(CAST(SUM(CASE WHEN Status IN ('PARA_FIRMAR', 'FINALIZADO', 'ATENDIDA') AND ProcessStartAt IS NOT NULL AND ProcessEndAt IS NOT NULL AND StandardTimeMinutes > 0 THEN 1 ELSE 0 END) AS FLOAT), 0) DESC,
+                    operationTypeName ASC
+                """
+            ),
+            params,
+        )
+        ots_by_operation_type = [
+            {
+                "name": row["operationTypeName"],
+                "otsRate": round((int(row.get("compliantOperations") or 0) * 100.0 / int(row.get("totalOperations") or 1)), 2),
+                "totalOperations": int(row.get("totalOperations") or 0),
+            }
+            for row in ots_by_operation_type_result.mappings().all()
+        ]
+
+        supervisor_result = await self.session.execute(
+            text(
+                """
+                WITH base AS (
+                    SELECT a.Id
+                    FROM dbo.tbl_Appointment a
+                    WHERE a.IsDeleted = 0
+                      AND (:date_from IS NULL OR COALESCE(a.ProcessStartAt, a.ScheduledAt) >= :date_from)
+                      AND (:date_to IS NULL OR COALESCE(a.ProcessStartAt, a.ScheduledAt) <= :date_to)
+                ),
+                supervisor_assignments AS (
+                    SELECT
+                        u.Id AS supervisorId,
+                        u.Name AS supervisorName,
+                        al.AppointmentId
+                    FROM dbo.tbl_AssignmentLog al
+                    INNER JOIN base b ON b.Id = al.AppointmentId
+                    INNER JOIN dbo.tbl_User u ON u.Id = al.AssignedByUserId
+                    INNER JOIN dbo.tbl_UserRole ur ON ur.UserId = u.Id
+                    INNER JOIN dbo.tbl_Role r ON r.Id = ur.RoleId
+                    WHERE al.AssignedByUserId IS NOT NULL
+                      AND r.Code IN ('SUPERVISOR', 'ADMIN')
+                    GROUP BY u.Id, u.Name, al.AppointmentId
+                )
+                SELECT
+                    supervisorId,
+                    supervisorName,
+                    COUNT(1) AS managedVehicles
+                FROM supervisor_assignments
+                GROUP BY supervisorId, supervisorName
+                ORDER BY COUNT(1) DESC, supervisorName ASC
+                """
+            ),
+            params,
+        )
+        supervisor_items = [
+            {
+                "supervisorId": int(row["supervisorId"]),
+                "name": row["supervisorName"],
+                "managedVehicles": int(row.get("managedVehicles") or 0),
+            }
+            for row in supervisor_result.mappings().all()
+        ]
+
+        bottlenecks = sorted(
+            [item for item in process_durations if item["averageMinutes"] is not None],
+            key=lambda item: item["averageMinutes"] or 0,
+            reverse=True,
+        )[:3]
+
+        def int_value(key: str) -> int:
+            return int(summary_row.get(key) or 0)
+
+        def float_value(key: str) -> float:
+            return round(float(summary_row.get(key) or 0), 2)
+
+        ots_total = int_value("otsTotal")
+        ots_compliant = int_value("otsCompliant")
+        otc_total = int_value("otcTotal")
+        otc_compliant = int_value("otcCompliant")
+        arrival_candidates = int_value("arrivalCandidates")
+        on_time_arrivals = int_value("onTimeArrivals")
+        average_total_stay = summary_row.get("averageTotalStayMinutes")
+
+        return {
+            "summary": {
+                "scheduledVehicles": int_value("scheduledVehicles"),
+                "inYardVehicles": int_value("inYardVehicles"),
+                "documentDeliveryVehicles": int_value("documentDeliveryVehicles"),
+                "inProcessVehicles": int_value("inProcessVehicles"),
+                "toSignVehicles": int_value("toSignVehicles"),
+                "finalizedVehicles": int_value("finalizedVehicles"),
+                "attendedVehicles": int_value("attendedVehicles"),
+                "cancelledVehicles": int_value("cancelledVehicles"),
+                "activeVehicles": int_value("inYardVehicles") + int_value("documentDeliveryVehicles") + int_value("inProcessVehicles") + int_value("toSignVehicles"),
+                "movedWeightKg": float_value("movedWeightKg"),
+                "otcRate": round((otc_compliant * 100.0 / otc_total), 2) if otc_total else None,
+                "otsRate": round((ots_compliant * 100.0 / ots_total), 2) if ots_total else None,
+                "onTimeArrivalRate": round((on_time_arrivals * 100.0 / arrival_candidates), 2) if arrival_candidates else None,
+                "evaluatedOperations": ots_total,
+                "cancelledOperations": int_value("cancelledVehicles"),
+                "supervisorsWithAssignments": len(supervisor_items),
+                "seniorOperatorsMeasured": len(senior_operator_ots),
+                "riskOperations": int_value("riskOperations"),
+                "averageTotalStayMinutes": round(float(average_total_stay), 2) if average_total_stay is not None else None,
+            },
+            "statusFunnel": status_funnel,
+            "processDurations": process_durations,
+            "bottlenecks": bottlenecks,
+            "seniorOperatorOts": senior_operator_ots,
+            "supervisorAssignments": supervisor_items,
+            "otsByClient": ots_by_client,
+            "otsByOperationType": ots_by_operation_type,
+        }
+
     async def get_active_operator_ids_by_level(self, appointment_id: int) -> dict[str, list[int]]:
         result = await self.session.execute(
             text(
@@ -301,154 +788,10 @@ class AppointmentRepositoryQueriesMixin:
 
     async def get_dashboard_summary(self, date_from=None, date_to=None) -> dict:
         params = {"date_from": date_from, "date_to": date_to}
-        aggregate_result = await self.session.execute(
-            text(
-                self._dashboard_base_sql()
-                + """
-                SELECT
-                    COUNT(1) AS total,
-                    SUM(CASE WHEN Status = 'AGENDADA' THEN 1 ELSE 0 END) AS agendada,
-                    SUM(CASE WHEN Status = 'EN_PATIO' THEN 1 ELSE 0 END) AS en_patio,
-                    SUM(CASE WHEN Status = 'ENTREGA_DOCUMENTOS' THEN 1 ELSE 0 END) AS entrega_documentos,
-                    SUM(CASE WHEN Status = 'EN_PROCESO' THEN 1 ELSE 0 END) AS en_proceso,
-                    SUM(CASE WHEN Status = 'PARA_FIRMAR' THEN 1 ELSE 0 END) AS para_firmar,
-                    SUM(CASE WHEN Status = 'FINALIZADO' THEN 1 ELSE 0 END) AS finalizado,
-                    SUM(CASE WHEN Status = 'ATENDIDA' THEN 1 ELSE 0 END) AS atendida,
-                    SUM(CASE WHEN Status = 'OPERACION_CANCELADA' THEN 1 ELSE 0 END) AS cancelada,
-                    SUM(
-                        CASE
-                            WHEN Status = 'EN_PROCESO'
-                              AND ProcessStartAt IS NOT NULL
-                              AND StandardTimeMinutes > 0
-                              AND DATEDIFF(MINUTE, ProcessStartAt, SYSUTCDATETIME()) > StandardTimeMinutes
-                            THEN 1 ELSE 0
-                        END
-                    ) AS retrasada,
-                    SUM(CASE WHEN ArrivalAt IS NOT NULL AND ScheduledAt IS NOT NULL THEN 1 ELSE 0 END) AS on_time_candidates,
-                    SUM(CASE WHEN ArrivalAt IS NOT NULL AND ScheduledAt IS NOT NULL AND ArrivalAt <= DATEADD(MINUTE, 15, ScheduledAt) THEN 1 ELSE 0 END) AS on_time_arrivals,
-                    SUM(CASE WHEN Status IN ('PARA_FIRMAR', 'FINALIZADO', 'ATENDIDA') AND ProcessStartAt IS NOT NULL AND ProcessEndAt IS NOT NULL AND StandardTimeMinutes > 0 THEN 1 ELSE 0 END) AS ots_total,
-                    SUM(CASE WHEN Status IN ('PARA_FIRMAR', 'FINALIZADO', 'ATENDIDA') AND ProcessStartAt IS NOT NULL AND ProcessEndAt IS NOT NULL AND StandardTimeMinutes > 0 AND DATEDIFF(MINUTE, ProcessStartAt, ProcessEndAt) <= StandardTimeMinutes THEN 1 ELSE 0 END) AS ots_compliant,
-                    SUM(
-                        CASE
-                            WHEN ArrivalAt IS NOT NULL
-                              AND ScheduledAt IS NOT NULL
-                              AND ArrivalAt <= DATEADD(MINUTE, 15, ScheduledAt)
-                              AND DocumentDeliveryAt IS NOT NULL
-                              AND DocumentDeliveryAt <= DATEADD(MINUTE, 35, CASE WHEN ArrivalAt > ScheduledAt THEN ArrivalAt ELSE ScheduledAt END)
-                            THEN 1 ELSE 0
-                        END
-                    ) AS otc_compliant,
-                    AVG(CAST(AssignmentDelayMinutes AS FLOAT)) AS averageAssignmentDelayMinutes,
-                    AVG(CAST(StartDelayMinutes AS FLOAT)) AS averageStartDelayMinutes,
-                    AVG(CAST(CheckoutDelayMinutes AS FLOAT)) AS averageCheckoutDelayMinutes
-                FROM base
-                """
-            ),
-            params,
+        conn = await self.session.connection()
+        aggregate, alerts, queue_stats, queue_items = await conn.run_sync(
+            lambda sync_conn: self._execute_dashboard_summary_sp(sync_conn, params)
         )
-        aggregate = dict(aggregate_result.mappings().one())
-
-        alerts_result = await self.session.execute(
-            text(
-                self._dashboard_base_sql()
-                + """
-                , alert_candidates AS (
-                    SELECT Id AS appointmentId, 'WAITING_ASSIGNMENT' AS type, 'MEDIUM' AS severity, 'Cita esperando asignación de recursos' AS message
-                    FROM base
-                    WHERE Status = 'EN_PATIO' AND ActiveOperatorCount = 0
-                    UNION ALL
-                    SELECT Id, 'NO_OPERATORS', 'HIGH', 'Recurso activo sin operadores asignados'
-                    FROM base
-                    WHERE Status IN ('ENTREGA_DOCUMENTOS', 'EN_PROCESO') AND ActiveOperatorCount = 0
-                    UNION ALL
-                    SELECT Id, 'DELAYED', 'HIGH', 'Cita retrasada frente al tiempo estándar'
-                    FROM base
-                    WHERE Status = 'EN_PROCESO'
-                      AND ProcessStartAt IS NOT NULL
-                      AND StandardTimeMinutes > 0
-                      AND DATEDIFF(MINUTE, ProcessStartAt, SYSUTCDATETIME()) > StandardTimeMinutes
-                    UNION ALL
-                    SELECT Id, 'AT_RISK', 'MEDIUM', 'Cita en riesgo de incumplir SLA'
-                    FROM base
-                    WHERE Status = 'EN_PROCESO'
-                      AND ProcessStartAt IS NOT NULL
-                      AND StandardTimeMinutes > 0
-                      AND DATEDIFF(MINUTE, ProcessStartAt, SYSUTCDATETIME()) <= StandardTimeMinutes
-                      AND DATEDIFF(MINUTE, ProcessStartAt, SYSUTCDATETIME()) >= CAST(StandardTimeMinutes * 0.8 AS INT)
-                )
-                SELECT TOP 10 appointmentId, type, severity, message
-                FROM alert_candidates
-                ORDER BY CASE WHEN severity = 'HIGH' THEN 0 ELSE 1 END, appointmentId
-                """
-            ),
-            params,
-        )
-        alerts = [dict(row) for row in alerts_result.mappings().all()]
-
-        queue_stats_result = await self.session.execute(
-            text(
-                self._dashboard_base_sql()
-                + """
-                , queue AS (
-                    SELECT
-                        Id AS appointmentId,
-                        Status AS status,
-                        CASE
-                            WHEN Status IN ('ENTREGA_DOCUMENTOS', 'EN_PROCESO') AND ActiveOperatorCount = 0 THEN 4
-                            WHEN Status = 'EN_PROCESO'
-                              AND ProcessStartAt IS NOT NULL
-                              AND StandardTimeMinutes > 0
-                              AND DATEDIFF(MINUTE, ProcessStartAt, SYSUTCDATETIME()) > StandardTimeMinutes THEN 4
-                            WHEN Status = 'EN_PATIO' AND ActiveOperatorCount = 0 THEN 3
-                            WHEN Status = 'EN_PROCESO'
-                              AND ProcessStartAt IS NOT NULL
-                              AND StandardTimeMinutes > 0
-                              AND DATEDIFF(MINUTE, ProcessStartAt, SYSUTCDATETIME()) >= CAST(StandardTimeMinutes * 0.8 AS INT) THEN 3
-                            ELSE 1
-                        END AS queueScore
-                    FROM base
-                    WHERE Status IN ('EN_PATIO', 'ENTREGA_DOCUMENTOS', 'EN_PROCESO', 'PARA_FIRMAR')
-                )
-                SELECT COUNT(1) AS activeCount, COALESCE(MAX(queueScore), 0) AS highestScore
-                FROM queue
-                """
-            ),
-            params,
-        )
-        queue_stats = dict(queue_stats_result.mappings().one())
-
-        queue_items_result = await self.session.execute(
-            text(
-                self._dashboard_base_sql()
-                + """
-                , queue AS (
-                    SELECT
-                        Id AS appointmentId,
-                        Status AS status,
-                        CASE
-                            WHEN Status IN ('ENTREGA_DOCUMENTOS', 'EN_PROCESO') AND ActiveOperatorCount = 0 THEN 4
-                            WHEN Status = 'EN_PROCESO'
-                              AND ProcessStartAt IS NOT NULL
-                              AND StandardTimeMinutes > 0
-                              AND DATEDIFF(MINUTE, ProcessStartAt, SYSUTCDATETIME()) > StandardTimeMinutes THEN 4
-                            WHEN Status = 'EN_PATIO' AND ActiveOperatorCount = 0 THEN 3
-                            WHEN Status = 'EN_PROCESO'
-                              AND ProcessStartAt IS NOT NULL
-                              AND StandardTimeMinutes > 0
-                              AND DATEDIFF(MINUTE, ProcessStartAt, SYSUTCDATETIME()) >= CAST(StandardTimeMinutes * 0.8 AS INT) THEN 3
-                            ELSE 1
-                        END AS queueScore
-                    FROM base
-                    WHERE Status IN ('EN_PATIO', 'ENTREGA_DOCUMENTOS', 'EN_PROCESO', 'PARA_FIRMAR')
-                )
-                SELECT TOP 10 appointmentId, status, queueScore
-                FROM queue
-                ORDER BY queueScore DESC, appointmentId ASC
-                """
-            ),
-            params,
-        )
-        queue_items = [dict(row) for row in queue_items_result.mappings().all()]
 
         total = int(aggregate["total"] or 0)
         attended = int(aggregate["atendida"] or 0)
@@ -498,6 +841,36 @@ class AppointmentRepositoryQueriesMixin:
             },
             "alerts": alerts,
         }
+
+    def _execute_dashboard_summary_sp(self, sync_conn, params: dict) -> tuple[dict, list[dict], dict, list[dict]]:
+        cursor = sync_conn.connection.cursor()
+        try:
+            cursor.execute(
+                "EXEC dbo.usp_GetDashboardSummary @date_from=?, @date_to=?",
+                (params["date_from"], params["date_to"]),
+            )
+            aggregate_rows = self._fetch_cursor_rows(cursor)
+            alerts = self._fetch_nextset_rows(cursor)
+            queue_stats_rows = self._fetch_nextset_rows(cursor)
+            queue_items = self._fetch_nextset_rows(cursor)
+        finally:
+            cursor.close()
+
+        aggregate = aggregate_rows[0] if aggregate_rows else {}
+        queue_stats = queue_stats_rows[0] if queue_stats_rows else {"activeCount": 0, "highestScore": 0}
+        return aggregate, alerts, queue_stats, queue_items
+
+    @staticmethod
+    def _fetch_cursor_rows(cursor) -> list[dict]:
+        if not cursor.description:
+            return []
+        columns = [column[0] for column in cursor.description]
+        return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+    def _fetch_nextset_rows(self, cursor) -> list[dict]:
+        if not cursor.nextset():
+            return []
+        return self._fetch_cursor_rows(cursor)
 
     async def list_appointments_page(
         self,
@@ -599,7 +972,19 @@ class AppointmentRepositoryQueriesMixin:
 
     async def get_appointment(self, appointment_id: int) -> dict | None:
         result = await self.session.execute(
-            text("SELECT * FROM dbo.vw_AppointmentOperational WHERE Id = :appointment_id"),
+            text("""
+                SELECT
+                    Id, ClientId, ClientName, OperationTypeId, OperationTypeName, StandardTimeMinutes,
+                    VehicleTypeId, VehicleTypeName, DriverName, DriverDocument, VehiclePlate,
+                    EstimatedTons, DockId, DockName, Status, ScheduledAt, ArrivalAt,
+                    DocumentDeliveryAt, ProcessStartAt, ProcessEndAt, FinalizedAt, CheckoutAt, CancelledAt,
+                    LastAssignedAt, ActiveOperatorCount, Remissions, Precincts, MovedWeightKg,
+                    NonComplianceComment, OtcNonComplianceReason, OtsNonComplianceReason,
+                    CancellationReason, IsNoShow, IsLateArrival, LateArrivalMinutes, Version,
+                    CreatedAt, UpdatedAt
+                FROM dbo.vw_AppointmentOperational
+                WHERE Id = :appointment_id
+            """),
             {"appointment_id": appointment_id},
         )
         row = result.mappings().first()

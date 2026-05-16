@@ -28,7 +28,7 @@ export function useMasterCatalogs(options = {}) {
   return useQuery<MasterCatalogs>({
     queryKey: ["master-catalogs"],
     queryFn: mastersService.catalogs,
-    staleTime: 300_000,
+    staleTime: Infinity,
     gcTime: 900_000,
     ...options,
     meta: {

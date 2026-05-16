@@ -1,42 +1,62 @@
-import { Activity, Gauge, OctagonAlert, PackageCheck } from "lucide-react";
+import { Activity, FileClock, Gauge, PackageCheck, Timer, Truck } from "lucide-react";
 
 import { Card } from "../../components/ui/Card";
 
 interface ConsultorSummaryCardsProps {
-  totalVolume: string;
-  bestOperario: string;
-  nonCompliances: number;
-  otsRate: number;
-  otcRate: number;
-  inProcessCount: number;
+  scheduledVehicles: number;
+  attendedVehicles: number;
+  movedWeightKg: number;
+  otsRate: number | null;
+  otcRate: number | null;
+  onTimeArrivalRate: number | null;
+  evaluatedOperations: number;
+  supervisorsWithAssignments: number;
+  seniorOperatorsMeasured: number;
+  cancelledOperations: number;
+}
+
+function formatRate(value: number | null) {
+  return typeof value === "number" ? `${Math.round(value)}%` : "-";
 }
 
 export function ConsultorSummaryCards({
-  totalVolume,
-  bestOperario,
-  nonCompliances,
+  scheduledVehicles,
+  attendedVehicles,
+  movedWeightKg,
   otsRate,
   otcRate,
-  inProcessCount,
+  onTimeArrivalRate,
+  evaluatedOperations,
+  supervisorsWithAssignments,
+  seniorOperatorsMeasured,
+  cancelledOperations,
 }: ConsultorSummaryCardsProps) {
   const cards = [
-    { label: "Volumen total", value: `${totalVolume} Kg`, Icon: PackageCheck },
-    { label: "Mejor operario", value: bestOperario, Icon: Gauge },
-    { label: "Incumplimientos", value: nonCompliances, Icon: OctagonAlert },
-    { label: "Citas en proceso", value: inProcessCount, Icon: Activity },
-    { label: "OTS", value: `${otsRate}%`, Icon: Activity },
-    { label: "OTC", value: `${otcRate}%`, Icon: Activity },
+    { label: "Programados", value: scheduledVehicles, Icon: Truck },
+    { label: "Atendidos", value: attendedVehicles, Icon: PackageCheck },
+    { label: "Cumple cita", value: formatRate(onTimeArrivalRate), Icon: Timer },
+    { label: "Canceladas", value: cancelledOperations, Icon: Truck },
+    { label: "OTC", value: formatRate(otcRate), Icon: Gauge },
+    { label: "OTS", value: formatRate(otsRate), Icon: Gauge },
+
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
       {cards.map((card) => {
         const Icon = card.Icon;
         return (
-          <Card key={card.label} title={card.label}>
-            <div className="flex items-center justify-between gap-4">
-              <Icon className="h-7 w-7 text-neutral-500" strokeWidth={1.75} />
-              <p className="text-right text-lg font-semibold text-neutral-800">{card.value}</p>
+          <Card key={card.label} title={null} className="rounded-lg">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase text-brand-secondary/70">
+                  {card.label}
+                </span>
+                <Icon className="h-5 w-5 text-brand-medium" strokeWidth={2} />
+              </div>
+              <p className="text-2xl font-bold tracking-tight text-brand-primary">
+                {card.value}
+              </p>
             </div>
           </Card>
         );

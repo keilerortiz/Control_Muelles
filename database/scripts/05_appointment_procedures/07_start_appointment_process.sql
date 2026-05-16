@@ -5,6 +5,7 @@ CREATE OR ALTER PROCEDURE dbo.usp_StartAppointmentProcess
     @Remissions NVARCHAR(2000),
     @Precincts NVARCHAR(2000),
     @ChangedBy INT,
+    @ExpectedVersion INT = NULL,
     @CorrelationId UNIQUEIDENTIFIER = NULL
 AS
 BEGIN
@@ -19,7 +20,8 @@ BEGIN
             @currentDocumentDeliveryAt DATETIME2,
             @currentProcessStartAt DATETIME2,
             @currentRemissions NVARCHAR(2000),
-            @currentPrecincts NVARCHAR(2000);
+            @currentPrecincts NVARCHAR(2000),
+            @currentVersion INT;
 
         SELECT
             @currentStatus = Status,
@@ -27,11 +29,17 @@ BEGIN
             @currentDocumentDeliveryAt = DocumentDeliveryAt,
             @currentProcessStartAt = ProcessStartAt,
             @currentRemissions = Remissions,
-            @currentPrecincts = Precincts
+            @currentPrecincts = Precincts,
+            @currentVersion = Version
         FROM dbo.tbl_Appointment
         WHERE Id = @AppointmentId AND IsDeleted = 0;
 
         IF @currentStatus IS NULL THROW 50036, 'RESOURCE_NOT_FOUND', 1;
+        
+        -- Optimistic Concurrency Check
+        IF @ExpectedVersion IS NOT NULL AND @currentVersion <> @ExpectedVersion
+            THROW 50040, 'CONCURRENCY_CONFLICT|The record has been modified by another user.', 1;
+
         IF @currentStatus <> 'ENTREGA_DOCUMENTOS' THROW 50037, 'INVALID_STATE_TRANSITION', 1;
         IF NULLIF(LTRIM(RTRIM(@Remissions)), '') IS NULL THROW 50054, 'VALIDATION_ERROR|REMISSIONS_REQUIRED', 1;
         IF NULLIF(LTRIM(RTRIM(@Precincts)), '') IS NULL THROW 50055, 'VALIDATION_ERROR|PRECINCTS_REQUIRED', 1;
@@ -45,10 +53,11 @@ BEGIN
             Remissions = @Remissions,
             Precincts = @Precincts,
             Status = 'EN_PROCESO',
-            UpdatedAt = GETUTCDATE(),
+            UpdatedAt = SYSUTCDATETIME(),
             UpdatedBy = @ChangedBy,
             Version = Version + 1
-        WHERE Id = @AppointmentId;
+        WHERE Id = @AppointmentId
+          AND (@ExpectedVersion IS NULL OR Version = @ExpectedVersion);
 
         DECLARE @currentDocumentDeliveryAtText NVARCHAR(MAX) = CONVERT(NVARCHAR(MAX), @currentDocumentDeliveryAt, 127);
         DECLARE @documentDeliveryAtText NVARCHAR(MAX) = CONVERT(NVARCHAR(MAX), @DocumentDeliveryAt, 127);
@@ -72,4 +81,3 @@ BEGIN
     END CATCH
 END;
 GO
-

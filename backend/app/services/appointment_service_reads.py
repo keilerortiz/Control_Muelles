@@ -82,6 +82,23 @@ class AppointmentServiceReadsMixin:
                 return {"timezone": "America/Bogota", "buckets": []}
             raise
 
+    async def logistics_dashboard(self, date_from=None, date_to=None) -> dict:
+        try:
+            return await self.repository.get_logistics_dashboard(date_from=date_from, date_to=date_to)
+        except DBAPIError as exc:
+            if self._dev_mode and self._is_db_unavailable(exc):
+                return {
+                    "summary": {},
+                    "statusFunnel": [],
+                    "processDurations": [],
+                    "bottlenecks": [],
+                    "seniorOperatorOts": [],
+                    "supervisorAssignments": [],
+                    "otsByClient": [],
+                    "otsByOperationType": [],
+                }
+            raise
+
     async def operator_performance(self, date_from=None, date_to=None) -> dict:
         try:
             return await self.repository.get_operator_performance(date_from=date_from, date_to=date_to)

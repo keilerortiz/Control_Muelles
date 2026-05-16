@@ -1,12 +1,25 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any, Awaitable
 from sqlalchemy.exc import DBAPIError
-
 from app.core.exceptions import AppError, NotFoundError
 from app.services.appointment_dev_store import DEV_APPOINTMENTS_STORE
 
+if TYPE_CHECKING:
+    from sqlalchemy.exc import DBAPIError
+    from app.core.exceptions import AppError
+    from app.repositories.appointment_repository import AppointmentRepository
+    from app.services.appointment_service import AppointmentService
+
 
 class AppointmentServiceCrudMixin:
+    if TYPE_CHECKING:
+        repository: AppointmentRepository
+        _dev_mode: bool
+        def detail(self, appointment_id: int) -> Awaitable[dict]: ...
+        def _is_db_unavailable(self, exc: DBAPIError) -> bool: ...
+        def _map_db_error(self, exc: DBAPIError) -> AppError: ...
+        async def _broadcast_change(self, action: str, appointment_id: int, status: str | None, correlation_id: str, origin_client_id: str | None = None) -> None: ...
     async def create(
         self, payload: dict, user_id: int, correlation_id: str, origin_client_id: str | None = None
     ) -> dict:
@@ -58,10 +71,11 @@ class AppointmentServiceCrudMixin:
         user_id: int,
         correlation_id: str,
         origin_client_id: str | None = None,
+        version: int | None = None,
     ) -> None:
         try:
             async with self.repository.session.begin():
-                await self.repository.delete_appointment(appointment_id, user_id, correlation_id)
+                await self.repository.delete_appointment(appointment_id, user_id, correlation_id, version)
         except DBAPIError as exc:
             if self._dev_mode and self._is_db_unavailable(exc):
                 DEV_APPOINTMENTS_STORE.delete(appointment_id)

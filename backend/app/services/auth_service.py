@@ -1,5 +1,8 @@
+from collections.abc import Awaitable
 from datetime import UTC, datetime, timedelta
-from typing import Awaitable, Callable
+from typing import Callable
+
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 
 from app.core.config import settings
 from app.core.exceptions import UnauthorizedError
@@ -12,9 +15,31 @@ from app.core.security import (
     verify_password,
 )
 from app.repositories.auth_repository import AuthRepository
-from sqlalchemy.exc import OperationalError, SQLAlchemyError
 
 LEGACY_ADMIN_HASH = "$2b$12$C6UzMDM.H6dfI/f/IKcEe.3vQW9IoWl6iYx3vGN9VOGBev5nYe9y"
+
+DEVELOPMENT_SEED_USERS = {
+    "admin@muelles.local": {
+        "id": 1,
+        "name": "Admin Control Muelles",
+        "roles": ["ADMIN"],
+    },
+    "supervisor@muelles.local": {
+        "id": 2,
+        "name": "Supervisor Control Muelles",
+        "roles": ["SUPERVISOR"],
+    },
+    "planeador@muelles.local": {
+        "id": 3,
+        "name": "Planeador Control Muelles",
+        "roles": ["PLANEADOR"],
+    },
+    "porteria@muelles.local": {
+        "id": 4,
+        "name": "Porteria Control Muelles",
+        "roles": ["PORTERIA"],
+    },
+}
 
 
 class AuthService:
@@ -141,16 +166,18 @@ class AuthService:
         if not self._is_development_seed_user(email, password):
             raise UnauthorizedError("Credenciales inválidas")
 
-        roles = ["ADMIN"]
-        user_id = 1
+        seed_user = self._get_development_seed_user(email)
+        if not seed_user:
+            raise UnauthorizedError("Credenciales inválidas")
+
         return {
-            "accessToken": create_access_token(user_id=user_id, roles=roles),
-            "refreshToken": create_refresh_token(user_id=user_id),
+            "accessToken": create_access_token(user_id=seed_user["id"], roles=seed_user["roles"]),
+            "refreshToken": create_refresh_token(user_id=seed_user["id"]),
             "user": {
-                "id": user_id,
-                "name": "Admin Control Muelles",
-                "email": settings.seed_admin_email,
-                "roles": roles,
+                "id": seed_user["id"],
+                "name": seed_user["name"],
+                "email": email,
+                "roles": seed_user["roles"],
             },
         }
 
@@ -163,12 +190,17 @@ class AuthService:
         if settings.app_env.lower() != "development":
             return False
 
-        expected_email = settings.seed_admin_email.strip().lower()
         effective_email = (user_email or email).strip().lower()
-        return (
-            effective_email == expected_email
-            and password == settings.seed_admin_password
+        return bool(self._get_development_seed_user(effective_email)) and (
+            password == settings.seed_admin_password
         )
+
+    @staticmethod
+    def _get_development_seed_user(email: str) -> dict | None:
+        normalized_email = email.strip().lower()
+        if normalized_email == settings.seed_admin_email.strip().lower():
+            return DEVELOPMENT_SEED_USERS["admin@muelles.local"]
+        return DEVELOPMENT_SEED_USERS.get(normalized_email)
 
     async def _run_in_transaction(self, action: Callable[[], Awaitable[None]]) -> None:
         if self.repository.session.in_transaction():

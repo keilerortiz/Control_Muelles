@@ -84,6 +84,8 @@ function useInvalidateQueries() {
   const invalidateListAndDashboard = () => {
     queryClient.invalidateQueries({ queryKey: ["appointments"], refetchType: "active" });
     queryClient.invalidateQueries({ queryKey: ["dashboard-summary"], refetchType: "active" });
+    queryClient.invalidateQueries({ queryKey: ["dashboard-kpis-timeline"], refetchType: "active" });
+    queryClient.invalidateQueries({ queryKey: ["logistics-dashboard"], refetchType: "active" });
   };
 
   const invalidateAppointment = (appointmentId: number) => {
@@ -122,8 +124,8 @@ export function useUpdateAppointment() {
 export function useRemoveAppointment() {
   const { invalidateListAndDashboard } = useInvalidateQueries();
 
-  return useMutation<unknown, Error, number>({
-    mutationFn: appointmentsService.remove,
+  return useMutation<unknown, Error, { appointmentId: number; version?: number }>({
+    mutationFn: ({ appointmentId, version }) => appointmentsService.remove(appointmentId, version),
     onSuccess: () => {
       invalidateListAndDashboard();
     },
@@ -235,29 +237,75 @@ export function useCancelAppointment() {
 }
 
 export function useAppointmentActions() {
-  const create = useCreateAppointment();
-  const update = useUpdateAppointment();
-  const remove = useRemoveAppointment();
-  const checkin = useCheckinAppointment();
-  const assign = useAssignAppointment();
-  const reassign = useReassignAppointment();
-  const startProcess = useStartProcessAppointment();
-  const toSign = useToSignAppointment();
-  const finalize = useFinalizeAppointment();
-  const checkout = useCheckoutAppointment();
-  const cancel = useCancelAppointment();
+  const createMutation = useCreateAppointment();
+  const updateMutation = useUpdateAppointment();
+  const removeMutation = useRemoveAppointment();
+  const checkinMutation = useCheckinAppointment();
+  const assignMutation = useAssignAppointment();
+  const reassignMutation = useReassignAppointment();
+  const startProcessMutation = useStartProcessAppointment();
+  const toSignMutation = useToSignAppointment();
+  const finalizeMutation = useFinalizeAppointment();
+  const checkoutMutation = useCheckoutAppointment();
+  const cancelMutation = useCancelAppointment();
 
-  return useMemo(() => ({
-    create,
-    update,
-    remove,
-    checkin,
-    assign,
-    reassign,
-    startProcess,
-    toSign,
-    finalize,
-    checkout,
-    cancel,
-  }), [create, update, remove, checkin, assign, reassign, startProcess, toSign, finalize, checkout, cancel]);
+  const actions = useMemo(
+    () => ({
+      create: createMutation.mutateAsync,
+      update: updateMutation.mutateAsync,
+      remove: removeMutation.mutateAsync,
+      checkin: checkinMutation.mutateAsync,
+      assign: assignMutation.mutateAsync,
+      reassign: reassignMutation.mutateAsync,
+      startProcess: startProcessMutation.mutateAsync,
+      toSign: toSignMutation.mutateAsync,
+      finalize: finalizeMutation.mutateAsync,
+      checkout: checkoutMutation.mutateAsync,
+      cancel: cancelMutation.mutateAsync,
+    }),
+    [
+      createMutation.mutateAsync,
+      updateMutation.mutateAsync,
+      removeMutation.mutateAsync,
+      checkinMutation.mutateAsync,
+      assignMutation.mutateAsync,
+      reassignMutation.mutateAsync,
+      startProcessMutation.mutateAsync,
+      toSignMutation.mutateAsync,
+      finalizeMutation.mutateAsync,
+      checkoutMutation.mutateAsync,
+      cancelMutation.mutateAsync,
+    ]
+  );
+
+  const pending = useMemo(
+    () => ({
+      create: createMutation.isPending,
+      edit: updateMutation.isPending,
+      remove: removeMutation.isPending,
+      checkin: checkinMutation.isPending,
+      assign: assignMutation.isPending,
+      reassign: reassignMutation.isPending,
+      startProcess: startProcessMutation.isPending,
+      toSign: toSignMutation.isPending,
+      finalize: finalizeMutation.isPending,
+      checkout: checkoutMutation.isPending,
+      cancel: cancelMutation.isPending,
+    }),
+    [
+      createMutation.isPending,
+      updateMutation.isPending,
+      removeMutation.isPending,
+      checkinMutation.isPending,
+      assignMutation.isPending,
+      reassignMutation.isPending,
+      startProcessMutation.isPending,
+      toSignMutation.isPending,
+      finalizeMutation.isPending,
+      checkoutMutation.isPending,
+      cancelMutation.isPending,
+    ]
+  );
+
+  return { actions, pending };
 }

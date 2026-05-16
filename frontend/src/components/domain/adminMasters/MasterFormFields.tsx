@@ -1,13 +1,16 @@
 import { Checkbox } from "../../ui/Checkbox";
 import { Input } from "../../ui/Input";
+import { Select } from "../../ui/Select";
 import { Textarea } from "../../ui/Textarea";
 import type { MasterCatalogs, MasterRoleOption } from "../../../domain/types/masters";
 
-type TabKey = "clients" | "vehicleTypes" | "operationTypes" | "users" | "standards";
+type TabKey = "clients" | "vehicleTypes" | "operationTypes" | "docks" | "operators" | "users" | "standards" | "nonComplianceReasons";
 type MasterFieldValue = string | number | boolean | string[];
 
 interface MasterFormState {
   name: string;
+  reasonType?: string;
+  operatorLevel?: string;
   standardTimeMinutes?: string | number;
   toleranceMinutes?: string | number;
   description: string;
@@ -30,6 +33,21 @@ export function MasterFormFields({
   updateValue,
   catalogs,
 }: MasterFormFieldsProps) {
+  if (tabKey === "operators") {
+    return (
+      <div className="grid gap-4 md:grid-cols-2">
+        <Input label="Nombre" value={form.name} onChange={(event) => updateValue("name", event.target.value)} className="md:col-span-2" />
+        <Select label="Nivel" value={form.operatorLevel || "JUNIOR"} onChange={(event) => updateValue("operatorLevel", event.target.value)}>
+          <option value="JUNIOR">Junior</option>
+          <option value="SENIOR">Senior</option>
+        </Select>
+        <div className="flex items-end">
+          <Checkbox label="Activo" checked={form.isActive} onChange={(event) => updateValue("isActive", event.target.checked)} />
+        </div>
+      </div>
+    );
+  }
+
   if (tabKey === "users") {
     return (
       <div className="grid gap-4 md:grid-cols-2">
@@ -61,6 +79,21 @@ export function MasterFormFields({
             checked={form.isActive}
             onChange={(event) => updateValue("isActive", event.target.checked)}
           />
+        </div>
+      </div>
+    );
+  }
+
+  if (tabKey === "nonComplianceReasons") {
+    return (
+      <div className="grid gap-4 md:grid-cols-2">
+        <Input label="Nombre" value={form.name} onChange={(event) => updateValue("name", event.target.value)} className="md:col-span-2" />
+        <Select label="Tipo de causal" value={form.reasonType || "OTC"} onChange={(event) => updateValue("reasonType", event.target.value)}>
+          <option value="OTC">OTC</option>
+          <option value="OTS">OTS</option>
+        </Select>
+        <div className="flex items-end">
+          <Checkbox label="Activo" checked={form.isActive} onChange={(event) => updateValue("isActive", event.target.checked)} />
         </div>
       </div>
     );
@@ -101,4 +134,3 @@ export function MasterFormFields({
     </div>
   );
 }
-

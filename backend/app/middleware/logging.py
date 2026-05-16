@@ -21,11 +21,22 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             return response
         if duration_ms < settings.request_log_min_duration_ms and response.status_code < 400:
             return response
-        logger.info(
-            "http_request",
-            endpoint=request.url.path,
-            method=request.method,
-            status_code=response.status_code,
-            duration_ms=duration_ms,
-        )
+        try:
+            log_kwargs = dict(
+                endpoint=request.url.path,
+                method=request.method,
+                status_code=response.status_code,
+                duration_ms=duration_ms,
+            )
+            if response.status_code >= 500:
+                logger.error("http_request", **log_kwargs)
+            elif response.status_code >= 400:
+                if response.status_code not in (401, 403, 404):
+                    logger.warning("http_request", **log_kwargs)
+            else:
+                logger.info("http_request", **log_kwargs)
+        except (OSError, Exception):
+            # Logging must never crash the request pipeline
+            pass
         return response
+

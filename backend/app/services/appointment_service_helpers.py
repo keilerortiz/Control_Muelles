@@ -15,12 +15,16 @@ class AppointmentServiceHelpersMixin:
         for code, (friendly_message, status_code) in ERROR_METADATA.items():
             if code in message:
                 details: dict[str, Any] = {}
+                final_message = friendly_message
                 if "|" in message:
                     suffix = message.split("|", 1)[1].strip()
                     if suffix:
                         details["rule"] = suffix
+                        if code == "VALIDATION_ERROR":
+                            # Convert OTS_REASON_REQUIRED to "Ots reason required" or similar
+                            final_message = suffix.replace("_", " ").capitalize()
                 return AppError(
-                    message=friendly_message,
+                    message=final_message,
                     error_code=code,
                     status_code=status_code,
                     details=details,

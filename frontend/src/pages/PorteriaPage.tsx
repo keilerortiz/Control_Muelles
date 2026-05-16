@@ -18,7 +18,7 @@ export function PorteriaPage() {
   const range = useDateRangeStore((state) => state.range);
   const dateRangeParams = useMemo(() => getDateRangeParams(range), [range]);
   const appointmentsQuery = useAppointments({ skip: 0, take: 100, ...dateRangeParams });
-  const actions = useAppointmentActions();
+  const { actions, pending } = useAppointmentActions();
   const [activeAction, setActiveAction] = useState<PorteriaActionKey | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<PorteriaAppointment | null>(null);
   const [actionError, setActionError] = useState("");
@@ -42,10 +42,10 @@ export function PorteriaPage() {
 
   const pendingMap = useMemo(
     () => ({
-      checkin: actions.checkin.isPending,
-      checkout: actions.checkout.isPending,
+      checkin: pending.checkin,
+      checkout: pending.checkout,
     }),
-    [actions.checkin.isPending, actions.checkout.isPending],
+    [pending.checkin, pending.checkout],
   );
 
   const handleActionOpen = useCallback((actionKey: PorteriaActionKey, appointment: PorteriaAppointment) => {
@@ -65,13 +65,21 @@ export function PorteriaPage() {
       return;
     }
 
+    const version = selectedAppointment.Version || selectedAppointment.version;
+
     try {
       if (activeAction === "checkin") {
-        await actions.checkin.mutateAsync({ appointmentId: selectedAppointment.Id, payload });
+        await actions.checkin({
+          appointmentId: selectedAppointment.Id,
+          payload: { ...payload, version },
+        });
       }
 
       if (activeAction === "checkout") {
-        await actions.checkout.mutateAsync({ appointmentId: selectedAppointment.Id, payload });
+        await actions.checkout({
+          appointmentId: selectedAppointment.Id,
+          payload: { ...payload, version },
+        });
       }
 
       handleActionClose();

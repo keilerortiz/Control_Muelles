@@ -1,7 +1,6 @@
 // src/pages/AppointmentsPage.jsx
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 
-import { AppointmentsTable } from "../components/domain/AppointmentsTable";
 import {
   actionLabels,
   getAvailableActions,
@@ -15,16 +14,14 @@ import {
   useAppointments,
 } from "../hooks/useAppointments";
 import { useDashboard } from "../hooks/useDashboard";
+import { useRealtime } from "../hooks/useRealtime";
+import { useDebounce } from "../hooks/useDebounce";
 import { useAuthStore } from "../store/authStore";
-import { Button } from "../components/ui/Button";
-import { Card } from "../components/ui/Card";
-import { EmptyState } from "../components/ui/EmptyState";
 import { ErrorState } from "../components/ui/ErrorState";
 import { Loader } from "../components/ui/Loader";
 import { useDateRangeStore } from "../store/dateRangeStore";
 import { getDateRangeParams } from "../utils/dateRange";
 import type { RoleCode } from "../domain/types/auth";
-import { useIsMinWidth } from "../hooks/useIsMinWidth";
 import {
   actionIconByKey,
   candidateActions,
@@ -32,6 +29,7 @@ import {
   PAGE_SIZE,
 } from "./appointments/constants";
 import { buildUniqueSortedOptions, filterAppointmentsByCatalog } from "./appointments/helpers";
+import { AppointmentsContent } from "./appointments/AppointmentsContent";
 import { AppointmentFiltersBar } from "./appointments/AppointmentFiltersBar";
 import { PlannerKpiGrid } from "./appointments/PlannerKpiGrid";
 import { useAppointmentActionHandler } from "./appointments/useAppointmentActionHandler";
@@ -39,11 +37,6 @@ import type { AppointmentActionKey, AppointmentRow, AppointmentsPageProps } from
 const AppointmentActionModal = lazy(() =>
   import("../components/domain/AppointmentActionModal").then((module) => ({
     default: module.AppointmentActionModal,
-  })),
-);
-const AppointmentDetailPanel = lazy(() =>
-  import("../components/domain/AppointmentDetailPanel").then((module) => ({
-    default: module.AppointmentDetailPanel,
   })),
 );
 export function AppointmentsPage({
@@ -54,7 +47,7 @@ export function AppointmentsPage({
   readOnly = false,
 }: AppointmentsPageProps) {
   const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 500);
   const [status, setStatus] = useState("");
   const [clientFilter, setClientFilter] = useState("");
   const [operationFilter, setOperationFilter] = useState("");
@@ -62,20 +55,10 @@ export function AppointmentsPage({
   const [activeAction, setActiveAction] = useState<AppointmentActionKey | null>(null);
   const [actionError, setActionError] = useState("");
   const [page, setPage] = useState(1);
-  const isDesktop = useIsMinWidth(1024);
 
   const roles = useAuthStore((state) => state.user?.roles || []) as RoleCode[];
   const range = useDateRangeStore((state) => state.range);
   const dateRangeParams = useMemo(() => getDateRangeParams(range), [range]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 500);
-    return () => clearTimeout(timer);
-  }, [search]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedSearch, status, dateRangeParams.date_from, dateRangeParams.date_to]);
 
   const appointmentsQuery = useAppointments({
     skip: (page - 1) * PAGE_SIZE,
@@ -93,8 +76,11 @@ export function AppointmentsPage({
     Boolean(selectedAppointmentId && activeAction && candidateActions.has(activeAction)),
   );
 
-  const actions = useAppointmentActions();
-  const summaryQuery = useDashboard(dateRangeParams);
+  const { actions, pending } = useAppointmentActions();
+  const { syncState } = useRealtime();
+  const summaryQuery = useDashboard(dateRangeParams, {
+    realtimeConnected: syncState === "CONNECTED",
+  });
 
   useEffect(() => {
     const currentRows = appointmentsQuery.data?.items || [];
@@ -105,40 +91,11 @@ export function AppointmentsPage({
     }
   }, [appointmentsQuery.data?.items, clientFilter, operationFilter, selectedAppointmentId]);
 
-  const selectedAppointment = detailQuery.data
+  const selectedAppointment = (detailQuery.data
     || (appointmentsQuery.data?.items || []).find((row) => row.Id === selectedAppointmentId)
-    || null;
+    || null) as NonNullable<typeof detailQuery.data> | null;
 
   const canCreate = !readOnly && createAllowedRoles.some((role) => roles.includes(role));
-
-  const pendingMap = useMemo(
-    () => ({
-      create: actions.create.isPending,
-      edit: actions.update.isPending,
-      remove: actions.remove.isPending,
-      checkin: actions.checkin.isPending,
-      assign: actions.assign.isPending,
-      reassign: actions.reassign.isPending,
-      startProcess: actions.startProcess.isPending,
-      toSign: actions.toSign.isPending,
-      finalize: actions.finalize.isPending,
-      checkout: actions.checkout.isPending,
-      cancel: actions.cancel.isPending,
-    }),
-    [
-      actions.create.isPending,
-      actions.update.isPending,
-      actions.remove.isPending,
-      actions.checkin.isPending,
-      actions.assign.isPending,
-      actions.reassign.isPending,
-      actions.startProcess.isPending,
-      actions.toSign.isPending,
-      actions.finalize.isPending,
-      actions.checkout.isPending,
-      actions.cancel.isPending,
-    ],
-  );
 
   const openAction = useCallback((actionKey: AppointmentActionKey) => {
     setActionError("");
@@ -159,6 +116,7 @@ export function AppointmentsPage({
   const handleActionSubmit = useAppointmentActionHandler({
     activeAction,
     selectedAppointmentId,
+    selectedAppointment,
     actions,
     candidatesQuery,
     closeAction,
@@ -174,6 +132,7 @@ export function AppointmentsPage({
   );
 
   const totalRows = Number(appointmentsQuery.data?.total || 0);
+  const safePage = Math.min(page, Math.max(1, Math.ceil(totalRows / PAGE_SIZE)));
 
   const clientOptions = useMemo(() => buildUniqueSortedOptions(rows, (row) => row.ClientName), [rows]);
   const operationOptions = useMemo(
@@ -226,13 +185,11 @@ export function AppointmentsPage({
         clientOptions={clientOptions}
         operationOptions={operationOptions}
         onSearchChange={setSearch}
-        onSearchSubmit={() => setDebouncedSearch(search)}
-        onStatusChange={setStatus}
-        onClientFilterChange={setClientFilter}
-        onOperationFilterChange={setOperationFilter}
+        onStatusChange={(val) => { setStatus(val); setPage(1); }}
+        onClientFilterChange={(val) => { setClientFilter(val); setPage(1); }}
+        onOperationFilterChange={(val) => { setOperationFilter(val); setPage(1); }}
         onResetFilters={() => {
           setSearch("");
-          setDebouncedSearch("");
           setStatus("");
           setClientFilter("");
           setOperationFilter("");
@@ -241,134 +198,23 @@ export function AppointmentsPage({
         onCreate={() => openAction("create")}
       />
 
-      {filteredRows.length === 0 ? (
-        <EmptyState title={emptyTitle} description={emptyDescription} />
-      ) : !isDesktop ? (
-          <div className="flex flex-col gap-4">
-            <div className="min-w-0 space-y-4">
-              <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
-                <AppointmentsTable
-                  rows={filteredRows}
-                  selectedAppointmentId={selectedAppointmentId}
-                  onSelect={selectAppointment}
-                  getRowActions={readOnly ? undefined : getRowActions}
-                  page={page}
-                  pageSize={PAGE_SIZE}
-                  total={totalRows}
-                  onPageChange={setPage}
-                />
-              </div>
-
-              {detailQuery.isLoading && selectedAppointmentId ? (
-                <Card title="Detalle de cita">
-                  <div className="flex items-center justify-center py-8">
-                    <Loader />
-                  </div>
-                </Card>
-              ) : (
-                <div className="max-h-[38vh] overflow-y-auto rounded-xl border border-neutral-200 bg-white shadow-sm">
-                  <Suspense fallback={<div className="p-4 text-sm text-neutral-500">Cargando detalle...</div>}>
-                    <AppointmentDetailPanel
-                      appointment={selectedAppointment}
-                      onAction={() => {}}
-                      showActions={false}
-                      showHistory={false}
-                    />
-                  </Suspense>
-                </div>
-              )}
-            </div>
-
-            <div className="min-w-0">
-              {detailQuery.isLoading && selectedAppointmentId ? (
-                <Card title="Historial de estados">
-                  <div className="flex items-center justify-center py-8">
-                    <Loader />
-                  </div>
-                </Card>
-              ) : (
-                <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
-                  <Suspense fallback={<div className="p-4 text-sm text-neutral-500">Cargando historial...</div>}>
-                    <AppointmentDetailPanel
-                      appointment={selectedAppointment}
-                      statusLog={statusLogQuery.data || []}
-                      roles={roles}
-                      onAction={(key) => openAction(key as AppointmentActionKey)}
-                      showDetail={false}
-                      showActions={false}
-                    />
-                  </Suspense>
-                </div>
-              )}
-            </div>
-          </div>
-      ) : (
-          <div className="min-h-0 flex-1 grid grid-cols-[minmax(0,1.95fr)_minmax(280px,0.62fr)] grid-rows-[minmax(0,1fr)_auto] gap-2">
-            <div className="contents">
-              <div className="min-h-0 min-w-0 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm col-start-1 row-start-1">
-                <AppointmentsTable
-                  rows={filteredRows}
-                  selectedAppointmentId={selectedAppointmentId}
-                  onSelect={selectAppointment}
-                  getRowActions={readOnly ? undefined : getRowActions}
-                  page={page}
-                  pageSize={PAGE_SIZE}
-                  total={totalRows}
-                  onPageChange={setPage}
-                  maxVisibleRows={8}
-                  fullHeight
-                />
-              </div>
-
-              <div className="min-h-0 min-w-0 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm col-start-2 row-start-1 row-span-2">
-                <div className="h-full overflow-y-auto">
-                  {detailQuery.isLoading && selectedAppointmentId ? (
-                    <Card title="Detalle de cita" className="h-full">
-                      <div className="flex items-center justify-center py-8">
-                        <Loader />
-                      </div>
-                    </Card>
-                  ) : (
-                <Suspense fallback={<div className="p-4 text-sm text-neutral-500">Cargando detalle...</div>}>
-                  <AppointmentDetailPanel
-                    appointment={selectedAppointment}
-                    roles={roles}
-                    onAction={(key) => openAction(key as AppointmentActionKey)}
-                    showActions={false}
-                    showHistory={false}
-                    historyFullHeight
-                    detailFullHeight
-                  />
-                </Suspense>
-              )}
-                </div>
-              </div>
-            </div>
-
-            <div className="min-w-0 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm col-start-1 row-start-2">
-              {detailQuery.isLoading && selectedAppointmentId ? (
-                <Card>
-                  <div className="flex items-center justify-center py-4">
-                    <Loader />
-                  </div>
-                </Card>
-              ) : (
-                <Suspense fallback={<div className="p-4 text-sm text-neutral-500">Cargando historial...</div>}>
-                  <AppointmentDetailPanel
-                    appointment={selectedAppointment}
-                    statusLog={statusLogQuery.data || []}
-                    roles={roles}
-                    onAction={(key) => openAction(key as AppointmentActionKey)}
-                    showDetail={false}
-                    showActions={false}
-                    historyVariant="horizontal-compact"
-                    historyHideTitle
-                  />
-                </Suspense>
-              )}
-            </div>
-          </div>
-      )}
+      <AppointmentsContent
+        rows={filteredRows}
+        emptyTitle={emptyTitle}
+        emptyDescription={emptyDescription}
+        selectedAppointmentId={selectedAppointmentId}
+        selectedAppointment={selectedAppointment}
+        detailLoading={detailQuery.isLoading}
+        statusLog={statusLogQuery.data || []}
+        roles={roles}
+        readOnly={readOnly}
+        getRowActions={getRowActions}
+        onSelect={selectAppointment}
+        onOpenAction={openAction}
+        page={safePage}
+        total={totalRows}
+        onPageChange={setPage}
+      />
 
       <Suspense fallback={null}>
         <AppointmentActionModal
@@ -377,7 +223,7 @@ export function AppointmentsPage({
           open={Boolean(activeAction)}
           onClose={closeAction}
           onSubmit={handleActionSubmit}
-          isPending={activeAction ? pendingMap[activeAction as keyof typeof pendingMap] : false}
+          isPending={activeAction ? pending[activeAction as keyof typeof pending] : false}
           errorMessage={actionError}
           candidates={candidatesQuery.data}
           candidatesLoading={candidatesQuery.isLoading}

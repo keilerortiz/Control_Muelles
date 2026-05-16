@@ -1,3 +1,4 @@
+import { Ban, PenSquare, Plus } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -35,7 +36,7 @@ export function BusinessRulesSection({
             <h2 className="text-base font-semibold text-neutral-900">Cliente + Vehículo + Operación → Estándar</h2>
             <p className="text-sm text-neutral-500">Define el estándar de cada operación.</p>
           </div>
-          <Button type="button" onClick={onCreateRule}>Nueva regla</Button>
+          <Button type="button" onClick={onCreateRule} leftIcon={<Plus />}>Nueva regla</Button>
         </div>
         {ruleRows.length === 0 ? (
           <EmptyState title="Sin reglas" description="No hay tiempos estándar registrados." />
@@ -56,8 +57,8 @@ export function BusinessRulesSection({
                 if (key === "actions") {
                   return (
                     <div className="flex items-center gap-2">
-                      <Button type="button" size="sm" variant="secondary" onClick={() => onEditRule(typedRow)}>Editar</Button>
-                      <Button type="button" size="sm" variant="danger" onClick={() => onAskDeleteRule(typedRow)}>Desactivar</Button>
+                      <Button type="button" size="sm" variant="secondary" onClick={() => onEditRule(typedRow)} leftIcon={<PenSquare />}>Editar</Button>
+                      <Button type="button" size="sm" variant="danger" onClick={() => onAskDeleteRule(typedRow)} leftIcon={<Ban />}>Desactivar</Button>
                     </div>
                   );
                 }

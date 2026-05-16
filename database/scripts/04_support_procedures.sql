@@ -54,7 +54,11 @@ CREATE OR ALTER PROCEDURE dbo.usp_InsertAppointmentAudit
     @CorrelationId UNIQUEIDENTIFIER = NULL
 AS
 BEGIN
-    IF ISNULL(@OldValue, '') = ISNULL(@NewValue, '')
+    IF NOT (
+        (@OldValue <> @NewValue)
+        OR (@OldValue IS NULL AND @NewValue IS NOT NULL)
+        OR (@OldValue IS NOT NULL AND @NewValue IS NULL)
+    )
         RETURN;
 
     INSERT INTO dbo.tbl_AppointmentAudit (
@@ -80,7 +84,7 @@ CREATE OR ALTER PROCEDURE dbo.usp_ValidateCandidatesVersion
     @CandidatesVersion BIGINT
 AS
 BEGIN
-    DECLARE @currentEpoch BIGINT = DATEDIFF_BIG(SECOND, '1970-01-01T00:00:00', GETUTCDATE());
+    DECLARE @currentEpoch BIGINT = DATEDIFF_BIG(SECOND, '1970-01-01T00:00:00', SYSUTCDATETIME());
     IF @CandidatesVersion IS NULL
        OR @CandidatesVersion > (@currentEpoch + 5)
        OR (@currentEpoch - @CandidatesVersion) > 30

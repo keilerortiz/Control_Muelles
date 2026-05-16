@@ -37,8 +37,8 @@ function LineChartCard({
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-4 text-sm">
-        <span className="inline-flex items-center gap-1 text-neutral-700"><span className="h-2.5 w-2.5 rounded-full bg-blue-500" />OTC</span>
-        <span className="inline-flex items-center gap-1 text-neutral-700"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />OTS</span>
+        <span className="inline-flex items-center gap-1 text-neutral-700"><span className="h-2.5 w-2.5 rounded-full bg-brand-secondary" />OTC</span>
+        <span className="inline-flex items-center gap-1 text-neutral-700"><span className="h-2.5 w-2.5 rounded-full bg-brand-light" />OTS</span>
       </div>
       <div className="grid grid-cols-[42px_minmax(0,1fr)] items-stretch gap-1">
         <div className="relative h-[220px]">
@@ -55,20 +55,20 @@ function LineChartCard({
         <div>
           <svg viewBox={`0 0 ${width} ${height}`} className="block w-full h-[220px]">
             {yTicks.map((tick) => (
-              <line key={tick} x1={0} y1={yFor(tick)} x2={chartW} y2={yFor(tick)} stroke="#e5e7eb" strokeWidth="1" />
+              <line key={tick} x1={0} y1={yFor(tick)} x2={chartW} y2={yFor(tick)} stroke="#E2E8F0" strokeWidth="1" />
             ))}
-            <path d={toPath(otcValues)} fill="none" stroke="#3b82f6" strokeWidth="2.5" />
-            <path d={toPath(otsValues)} fill="none" stroke="#10b981" strokeWidth="2.5" />
+            <path d={toPath(otcValues)} fill="none" stroke="#0A2A5E" strokeWidth="2.5" />
+            <path d={toPath(otsValues)} fill="none" stroke="#3FA9F5" strokeWidth="2.5" />
             {otcValues.map((value, idx) => (
               typeof value === "number" ? (
-                <circle key={`otc-${idx}`} cx={xFor(idx)} cy={yFor(value)} r="3.5" fill="#3b82f6">
+                <circle key={`otc-${idx}`} cx={xFor(idx)} cy={yFor(value)} r="3.5" fill="#0A2A5E">
                   <title>{`OTC ${labels[idx]}: ${value}%`}</title>
                 </circle>
               ) : null
             ))}
             {otsValues.map((value, idx) => (
               typeof value === "number" ? (
-                <circle key={`ots-${idx}`} cx={xFor(idx)} cy={yFor(value)} r="3.5" fill="#10b981">
+                <circle key={`ots-${idx}`} cx={xFor(idx)} cy={yFor(value)} r="3.5" fill="#3FA9F5">
                   <title>{`OTS ${labels[idx]}: ${value}%`}</title>
                 </circle>
               ) : null

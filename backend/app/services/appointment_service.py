@@ -1,6 +1,5 @@
 from app.core.config import settings
 from app.repositories.appointment_repository import AppointmentRepository
-from app.services.appointment_dev_store import DEV_APPOINTMENTS_STORE, _InMemoryAppointmentsStore
 from app.services.appointment_service_actions import AppointmentServiceActionsMixin
 from app.services.appointment_service_crud import AppointmentServiceCrudMixin
 from app.services.appointment_service_helpers import AppointmentServiceHelpersMixin

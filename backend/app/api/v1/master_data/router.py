@@ -7,6 +7,8 @@ from app.middleware.auth import require_roles
 from app.schemas.master_data import (
     ActiveNamedPayload,
     BusinessRulePayload,
+    NonComplianceReasonPayload,
+    OperatorPayload,
     OperationTypePayload,
     StandardPayload,
     UserCreatePayload,
@@ -68,6 +70,51 @@ async def update_operation_type(item_id: int, payload: OperationTypePayload, ser
 @router.delete("/operation-types/{item_id}")
 async def delete_operation_type(item_id: int, service: MasterDataService = Depends(get_master_data_service), _=Depends(require_roles(Role.ADMIN))):
     return success_response("Tipo de operación desactivado", await service.delete_operation_type(item_id))
+
+
+@router.post("/docks", status_code=201)
+async def create_dock(payload: ActiveNamedPayload, service: MasterDataService = Depends(get_master_data_service), _=Depends(require_roles(Role.ADMIN))):
+    return success_response("Muelle creado", await service.create_dock(payload.model_dump()), status_code=201)
+
+
+@router.put("/docks/{item_id}")
+async def update_dock(item_id: int, payload: ActiveNamedPayload, service: MasterDataService = Depends(get_master_data_service), _=Depends(require_roles(Role.ADMIN))):
+    return success_response("Muelle actualizado", await service.update_dock(item_id, payload.model_dump()))
+
+
+@router.delete("/docks/{item_id}")
+async def delete_dock(item_id: int, service: MasterDataService = Depends(get_master_data_service), _=Depends(require_roles(Role.ADMIN))):
+    return success_response("Muelle desactivado", await service.delete_dock(item_id))
+
+
+@router.post("/non-compliance-reasons", status_code=201)
+async def create_non_compliance_reason(payload: NonComplianceReasonPayload, service: MasterDataService = Depends(get_master_data_service), _=Depends(require_roles(Role.ADMIN))):
+    return success_response("Causal creada", await service.create_non_compliance_reason(payload.model_dump()), status_code=201)
+
+
+@router.put("/non-compliance-reasons/{item_id}")
+async def update_non_compliance_reason(item_id: int, payload: NonComplianceReasonPayload, service: MasterDataService = Depends(get_master_data_service), _=Depends(require_roles(Role.ADMIN))):
+    return success_response("Causal actualizada", await service.update_non_compliance_reason(item_id, payload.model_dump()))
+
+
+@router.delete("/non-compliance-reasons/{item_id}")
+async def delete_non_compliance_reason(item_id: int, service: MasterDataService = Depends(get_master_data_service), _=Depends(require_roles(Role.ADMIN))):
+    return success_response("Causal desactivada", await service.delete_non_compliance_reason(item_id))
+
+
+@router.post("/operators", status_code=201)
+async def create_operator(payload: OperatorPayload, service: MasterDataService = Depends(get_master_data_service), _=Depends(require_roles(Role.ADMIN))):
+    return success_response("Operario creado", await service.create_operator(payload.model_dump()), status_code=201)
+
+
+@router.put("/operators/{item_id}")
+async def update_operator(item_id: int, payload: OperatorPayload, service: MasterDataService = Depends(get_master_data_service), _=Depends(require_roles(Role.ADMIN))):
+    return success_response("Operario actualizado", await service.update_operator(item_id, payload.model_dump()))
+
+
+@router.delete("/operators/{item_id}")
+async def delete_operator(item_id: int, service: MasterDataService = Depends(get_master_data_service), _=Depends(require_roles(Role.ADMIN))):
+    return success_response("Operario desactivado", await service.delete_operator(item_id))
 
 
 @router.post("/standards", status_code=201)

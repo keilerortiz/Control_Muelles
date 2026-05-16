@@ -4,6 +4,7 @@ CREATE OR ALTER PROCEDURE dbo.usp_CheckInAppointment
     @DriverDocument NVARCHAR(80),
     @VehiclePlate NVARCHAR(20),
     @ChangedBy INT,
+    @ExpectedVersion INT = NULL,
     @CorrelationId UNIQUEIDENTIFIER = NULL
 AS
 BEGIN
@@ -17,17 +18,24 @@ BEGIN
             @currentDriverName NVARCHAR(150),
             @currentDriverDocument NVARCHAR(80),
             @currentVehiclePlate NVARCHAR(20),
-            @arrivalAt DATETIME2 = GETUTCDATE();
+            @currentVersion INT,
+            @arrivalAt DATETIME2 = SYSUTCDATETIME();
 
         SELECT
             @currentStatus = Status,
             @currentDriverName = DriverName,
             @currentDriverDocument = DriverDocument,
-            @currentVehiclePlate = VehiclePlate
+            @currentVehiclePlate = VehiclePlate,
+            @currentVersion = Version
         FROM dbo.tbl_Appointment
         WHERE Id = @AppointmentId AND IsDeleted = 0;
 
         IF @currentStatus IS NULL THROW 50015, 'RESOURCE_NOT_FOUND', 1;
+        
+        -- Optimistic Concurrency Check
+        IF @ExpectedVersion IS NOT NULL AND @currentVersion <> @ExpectedVersion
+            THROW 50040, 'CONCURRENCY_CONFLICT|The record has been modified by another user.', 1;
+
         IF @currentStatus <> 'AGENDADA' THROW 50016, 'INVALID_STATE_TRANSITION', 1;
 
         UPDATE dbo.tbl_Appointment
@@ -37,10 +45,11 @@ BEGIN
             VehiclePlate = @VehiclePlate,
             ArrivalAt = @arrivalAt,
             Status = 'EN_PATIO',
-            UpdatedAt = GETUTCDATE(),
+            UpdatedAt = SYSUTCDATETIME(),
             UpdatedBy = @ChangedBy,
             Version = Version + 1
-        WHERE Id = @AppointmentId;
+        WHERE Id = @AppointmentId
+          AND (@ExpectedVersion IS NULL OR Version = @ExpectedVersion);
 
         DECLARE @arrivalAtText NVARCHAR(MAX) = CONVERT(NVARCHAR(MAX), @arrivalAt, 127);
 
@@ -61,4 +70,3 @@ BEGIN
     END CATCH
 END;
 GO
-

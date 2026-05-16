@@ -63,9 +63,9 @@ export default function App() {
     <div className="h-screen overflow-hidden bg-neutral-100">
       <div className="flex h-full">
         <Sidebar isOpen={isSidebarOpen} onClose={closeSidebar} />
-        <div className="flex flex-1 flex-col h-full overflow-hidden">
+        <div className="flex flex-1 flex-col h-full min-w-0">
           <Topbar onMenuClick={toggleSidebar} menuButtonRef={menuButtonRef} />
-          <main className="flex-1 overflow-hidden p-2 md:p-2.5">
+          <main className="flex-1 overflow-y-auto p-2 md:p-2.5">
             <Outlet />
           </main>
         </div>

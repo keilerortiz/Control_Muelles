@@ -5,12 +5,13 @@ import type { AppointmentMutationPayload } from "../../domain/types/appointments
 import type { AppointmentActionType } from "../../components/domain/appointmentActionModal/formUtils";
 import type { useAppointmentActions, useAppointmentCandidates } from "../../hooks/useAppointments";
 
-type AppointmentActions = ReturnType<typeof useAppointmentActions>;
+type AppointmentActions = ReturnType<typeof useAppointmentActions>["actions"];
 type CandidatesQuery = ReturnType<typeof useAppointmentCandidates>;
 
 interface ActionHandlerArgs {
   activeAction: AppointmentActionType | null;
   selectedAppointmentId: number | null;
+  selectedAppointment: any | null;
   actions: AppointmentActions;
   candidatesQuery: CandidatesQuery;
   closeAction: () => void;
@@ -32,6 +33,7 @@ function isCandidatesExpiredError(error: unknown) {
 export function useAppointmentActionHandler({
   activeAction,
   selectedAppointmentId,
+  selectedAppointment,
   actions,
   candidatesQuery,
   closeAction,
@@ -44,6 +46,10 @@ export function useAppointmentActionHandler({
       return selectedAppointmentId;
     };
 
+    const getVersion = () => {
+      return selectedAppointment?.Version || selectedAppointment?.version;
+    };
+
     const retryWithFreshCandidates = async (
       mutationFn: (args: { appointmentId: number; payload: AppointmentMutationPayload }) => Promise<unknown>,
     ) => {
@@ -52,46 +58,76 @@ export function useAppointmentActionHandler({
       if (!freshVersion) throw new Error("No fue posible refrescar candidatos.");
       await mutationFn({
         appointmentId: requireSelectedAppointmentId(),
-        payload: { ...payload, candidatesVersion: freshVersion },
+        payload: { ...payload, candidatesVersion: freshVersion, version: getVersion() },
       });
     };
 
     try {
       if (activeAction === "create") {
-        const created = await actions.create.mutateAsync(payload);
+        const created = await actions.create(payload);
         setSelectedAppointmentId(created.Id);
       } else if (activeAction === "edit") {
-        const updated = await actions.update.mutateAsync({ appointmentId: requireSelectedAppointmentId(), payload });
+        const updated = await actions.update({
+          appointmentId: requireSelectedAppointmentId(),
+          payload: { ...payload, version: getVersion() },
+        });
         setSelectedAppointmentId(updated.Id);
       } else if (activeAction === "remove") {
-        await actions.remove.mutateAsync(requireSelectedAppointmentId());
+        await actions.remove({
+          appointmentId: requireSelectedAppointmentId(),
+          version: getVersion(),
+        });
         setSelectedAppointmentId(null);
       } else if (activeAction === "checkin") {
-        await actions.checkin.mutateAsync({ appointmentId: requireSelectedAppointmentId(), payload });
+        await actions.checkin({
+          appointmentId: requireSelectedAppointmentId(),
+          payload: { ...payload, version: getVersion() },
+        });
       } else if (activeAction === "assign") {
         try {
-          await actions.assign.mutateAsync({ appointmentId: requireSelectedAppointmentId(), payload });
+          await actions.assign({
+            appointmentId: requireSelectedAppointmentId(),
+            payload: { ...payload, version: getVersion() },
+          });
         } catch (error) {
           if (!isCandidatesExpiredError(error)) throw error;
-          await retryWithFreshCandidates(actions.assign.mutateAsync);
+          await retryWithFreshCandidates(actions.assign);
         }
       } else if (activeAction === "reassign") {
         try {
-          await actions.reassign.mutateAsync({ appointmentId: requireSelectedAppointmentId(), payload });
+          await actions.reassign({
+            appointmentId: requireSelectedAppointmentId(),
+            payload: { ...payload, version: getVersion() },
+          });
         } catch (error) {
           if (!isCandidatesExpiredError(error)) throw error;
-          await retryWithFreshCandidates(actions.reassign.mutateAsync);
+          await retryWithFreshCandidates(actions.reassign);
         }
       } else if (activeAction === "startProcess") {
-        await actions.startProcess.mutateAsync({ appointmentId: requireSelectedAppointmentId(), payload });
+        await actions.startProcess({
+          appointmentId: requireSelectedAppointmentId(),
+          payload: { ...payload, version: getVersion() },
+        });
       } else if (activeAction === "toSign") {
-        await actions.toSign.mutateAsync({ appointmentId: requireSelectedAppointmentId(), payload });
+        await actions.toSign({
+          appointmentId: requireSelectedAppointmentId(),
+          payload: { ...payload, version: getVersion() },
+        });
       } else if (activeAction === "finalize") {
-        await actions.finalize.mutateAsync({ appointmentId: requireSelectedAppointmentId(), payload });
+        await actions.finalize({
+          appointmentId: requireSelectedAppointmentId(),
+          payload: { ...payload, version: getVersion() },
+        });
       } else if (activeAction === "checkout") {
-        await actions.checkout.mutateAsync({ appointmentId: requireSelectedAppointmentId(), payload });
+        await actions.checkout({
+          appointmentId: requireSelectedAppointmentId(),
+          payload: { ...payload, version: getVersion() },
+        });
       } else if (activeAction === "cancel") {
-        await actions.cancel.mutateAsync({ appointmentId: requireSelectedAppointmentId(), payload });
+        await actions.cancel({
+          appointmentId: requireSelectedAppointmentId(),
+          payload: { ...payload, version: getVersion() },
+        });
       }
       closeAction();
     } catch (error) {

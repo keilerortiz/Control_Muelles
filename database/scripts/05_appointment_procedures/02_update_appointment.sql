@@ -5,7 +5,12 @@ CREATE OR ALTER PROCEDURE dbo.usp_UpdateAppointment
     @VehicleTypeId INT,
     @EstimatedTons DECIMAL(18,2),
     @ScheduledAt DATETIME2,
+    @DriverName NVARCHAR(150) = NULL,
+    @DriverDocument NVARCHAR(80) = NULL,
+    @VehiclePlate NVARCHAR(20) = NULL,
+    @NonComplianceComment NVARCHAR(1000) = NULL,
     @UpdatedBy INT,
+    @ExpectedVersion INT = NULL,
     @CorrelationId UNIQUEIDENTIFIER = NULL
 AS
 BEGIN
@@ -20,7 +25,8 @@ BEGIN
             @currentOperationTypeId INT,
             @currentVehicleTypeId INT,
             @currentEstimatedTons DECIMAL(18,2),
-            @currentScheduledAt DATETIME2;
+            @currentScheduledAt DATETIME2,
+            @currentVersion INT;
 
         SELECT
             @currentStatus = Status,
@@ -28,13 +34,19 @@ BEGIN
             @currentOperationTypeId = OperationTypeId,
             @currentVehicleTypeId = VehicleTypeId,
             @currentEstimatedTons = EstimatedTons,
-            @currentScheduledAt = ScheduledAt
+            @currentScheduledAt = ScheduledAt,
+            @currentVersion = Version
         FROM dbo.tbl_Appointment
         WHERE Id = @AppointmentId AND IsDeleted = 0;
 
         IF @currentStatus IS NULL THROW 50006, 'RESOURCE_NOT_FOUND', 1;
+        
+        -- Optimistic Concurrency Check
+        IF @ExpectedVersion IS NOT NULL AND @currentVersion <> @ExpectedVersion
+            THROW 50040, 'CONCURRENCY_CONFLICT|The record has been modified by another user.', 1;
+
         IF @currentStatus <> 'AGENDADA' THROW 50007, 'INVALID_STATUS_FOR_UPDATE', 1;
-        IF @ScheduledAt <= GETUTCDATE() THROW 50008, 'INVALID_DATE', 1;
+        IF @ScheduledAt <= SYSUTCDATETIME() THROW 50008, 'INVALID_DATE', 1;
 
         IF NOT EXISTS (SELECT 1 FROM dbo.tbl_Client WHERE Id = @ClientId AND IsActive = 1)
             THROW 50009, 'VALIDATION_ERROR|INVALID_CONFIGURATION', 1;
@@ -68,10 +80,15 @@ BEGIN
             VehicleTypeId = @VehicleTypeId,
             EstimatedTons = @EstimatedTons,
             ScheduledAt = @ScheduledAt,
-            UpdatedAt = GETUTCDATE(),
+            DriverName = @DriverName,
+            DriverDocument = @DriverDocument,
+            VehiclePlate = @VehiclePlate,
+            NonComplianceComment = @NonComplianceComment,
+            UpdatedAt = SYSUTCDATETIME(),
             UpdatedBy = @UpdatedBy,
             Version = Version + 1
-        WHERE Id = @AppointmentId;
+        WHERE Id = @AppointmentId
+          AND (@ExpectedVersion IS NULL OR Version = @ExpectedVersion);
 
         DECLARE
             @currentClientIdText NVARCHAR(MAX) = CONVERT(NVARCHAR(MAX), @currentClientId),
@@ -100,4 +117,3 @@ BEGIN
     END CATCH
 END;
 GO
-

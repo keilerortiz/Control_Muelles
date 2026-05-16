@@ -23,12 +23,6 @@ export const roleNavigationItems: Array<{
     roles: ["CONSULTOR", "ADMIN"],
   },
   {
-    to: "/consultor/citas",
-    label: "Citas (consulta)",
-    Icon: CalendarClock,
-    roles: ["CONSULTOR", "ADMIN"],
-  },
-  {
     to: "/admin",
     label: "Maestros",
     Icon: SlidersHorizontal,
@@ -70,6 +64,9 @@ export function getDefaultRouteForRoles(roles: RoleCode[] = []) {
 }
 
 export function getRouteLabel(pathname: string) {
-  const currentItem = roleNavigationItems.find((item) => pathname.startsWith(item.to));
+  // Ordenar por longitud descendente para que coincida primero con la ruta más específica
+  const currentItem = [...roleNavigationItems]
+    .sort((a, b) => b.to.length - a.to.length)
+    .find((item) => pathname.startsWith(item.to));
   return currentItem?.label || "Operación";
 }

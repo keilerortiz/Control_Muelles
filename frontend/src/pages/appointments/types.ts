@@ -21,7 +21,6 @@ export interface AppointmentFilterBarProps {
   clientOptions: string[];
   operationOptions: string[];
   onSearchChange: (value: string) => void;
-  onSearchSubmit: () => void;
   onStatusChange: (value: string) => void;
   onClientFilterChange: (value: string) => void;
   onOperationFilterChange: (value: string) => void;

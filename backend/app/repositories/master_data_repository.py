@@ -51,6 +51,15 @@ class MasterDataRepository:
             """
         )
 
+    async def list_docks(self) -> list[dict]:
+        return await self._fetch_all(
+            """
+            SELECT Id, Name, IsActive, CreatedAt
+            FROM dbo.tbl_Dock
+            ORDER BY Name ASC
+            """
+        )
+
     async def create_operation_type(self, payload: dict) -> dict:
         result = await self.session.execute(
             text(
@@ -105,6 +114,146 @@ class MasterDataRepository:
         row = result.mappings().first()
         return dict(row) if row else None
 
+    async def create_dock(self, payload: dict) -> dict:
+        return await self._insert_named("dbo.tbl_Dock", payload)
+
+    async def update_dock(self, item_id: int, payload: dict) -> dict | None:
+        return await self._update_named("dbo.tbl_Dock", item_id, payload)
+
+    async def deactivate_dock(self, item_id: int) -> dict | None:
+        return await self._deactivate_named("dbo.tbl_Dock", item_id)
+
+    async def list_non_compliance_reasons(self) -> list[dict]:
+        return await self._fetch_all(
+            """
+            SELECT Id, Name, ReasonType, IsActive, CreatedAt, UpdatedAt
+            FROM dbo.tbl_NonComplianceReason
+            WHERE IsDeleted = 0
+            ORDER BY ReasonType ASC, Name ASC
+            """
+        )
+
+    async def create_non_compliance_reason(self, payload: dict) -> dict:
+        result = await self.session.execute(
+            text(
+                """
+                INSERT INTO dbo.tbl_NonComplianceReason (Name, ReasonType, IsActive)
+                OUTPUT INSERTED.Id, INSERTED.Name, INSERTED.ReasonType, INSERTED.IsActive, INSERTED.CreatedAt, INSERTED.UpdatedAt
+                VALUES (:name, :reason_type, :is_active)
+                """
+            ),
+            {
+                "name": payload["name"],
+                "reason_type": payload["reasonType"],
+                "is_active": payload["isActive"],
+            },
+        )
+        return dict(result.mappings().one())
+
+    async def update_non_compliance_reason(self, item_id: int, payload: dict) -> dict | None:
+        result = await self.session.execute(
+            text(
+                """
+                UPDATE dbo.tbl_NonComplianceReason
+                SET Name = :name,
+                    ReasonType = :reason_type,
+                    IsActive = :is_active,
+                    UpdatedAt = SYSUTCDATETIME()
+                OUTPUT INSERTED.Id, INSERTED.Name, INSERTED.ReasonType, INSERTED.IsActive, INSERTED.CreatedAt, INSERTED.UpdatedAt
+                WHERE Id = :item_id
+                  AND IsDeleted = 0
+                """
+            ),
+            {
+                "item_id": item_id,
+                "name": payload["name"],
+                "reason_type": payload["reasonType"],
+                "is_active": payload["isActive"],
+            },
+        )
+        row = result.mappings().first()
+        return dict(row) if row else None
+
+    async def deactivate_non_compliance_reason(self, item_id: int) -> dict | None:
+        result = await self.session.execute(
+            text(
+                """
+                UPDATE dbo.tbl_NonComplianceReason
+                SET IsActive = 0,
+                    UpdatedAt = SYSUTCDATETIME()
+                OUTPUT INSERTED.Id, INSERTED.Name, INSERTED.ReasonType, INSERTED.IsActive, INSERTED.CreatedAt, INSERTED.UpdatedAt
+                WHERE Id = :item_id
+                  AND IsDeleted = 0
+                """
+            ),
+            {"item_id": item_id},
+        )
+        row = result.mappings().first()
+        return dict(row) if row else None
+
+    async def list_operators(self) -> list[dict]:
+        return await self._fetch_all(
+            """
+            SELECT Id, Name, OperatorLevel, MaxConcurrentOperations, IsActive, CreatedAt
+            FROM dbo.tbl_Operator
+            ORDER BY Name ASC
+            """
+        )
+
+    async def create_operator(self, payload: dict) -> dict:
+        result = await self.session.execute(
+            text(
+                """
+                INSERT INTO dbo.tbl_Operator (Name, OperatorLevel, IsActive)
+                OUTPUT INSERTED.Id, INSERTED.Name, INSERTED.OperatorLevel, INSERTED.MaxConcurrentOperations, INSERTED.IsActive, INSERTED.CreatedAt
+                VALUES (:name, :operator_level, :is_active)
+                """
+            ),
+            {
+                "name": payload["name"],
+                "operator_level": payload["operatorLevel"],
+                "is_active": payload["isActive"],
+            },
+        )
+        return dict(result.mappings().one())
+
+    async def update_operator(self, item_id: int, payload: dict) -> dict | None:
+        result = await self.session.execute(
+            text(
+                """
+                UPDATE dbo.tbl_Operator
+                SET Name = :name,
+                    OperatorLevel = :operator_level,
+                    IsActive = :is_active
+                OUTPUT INSERTED.Id, INSERTED.Name, INSERTED.OperatorLevel, INSERTED.MaxConcurrentOperations, INSERTED.IsActive, INSERTED.CreatedAt
+                WHERE Id = :item_id
+                """
+            ),
+            {
+                "item_id": item_id,
+                "name": payload["name"],
+                "operator_level": payload["operatorLevel"],
+                "is_active": payload["isActive"],
+            },
+        )
+        row = result.mappings().first()
+        return dict(row) if row else None
+
+    async def deactivate_operator(self, item_id: int) -> dict | None:
+        result = await self.session.execute(
+            text(
+                """
+                UPDATE dbo.tbl_Operator
+                SET IsActive = 0
+                OUTPUT INSERTED.Id, INSERTED.Name, INSERTED.OperatorLevel, INSERTED.MaxConcurrentOperations, INSERTED.IsActive, INSERTED.CreatedAt
+                WHERE Id = :item_id
+                """
+            ),
+            {"item_id": item_id},
+        )
+        row = result.mappings().first()
+        return dict(row) if row else None
+
     async def list_standards(self) -> list[dict]:
         return await self._fetch_all(
             """
@@ -143,7 +292,7 @@ class MasterDataRepository:
                     ToleranceMinutes = :tolerance_minutes,
                     Description = :description,
                     IsActive = :is_active,
-                    UpdatedAt = GETUTCDATE()
+                    UpdatedAt = SYSUTCDATETIME()
                 OUTPUT INSERTED.Id, INSERTED.Name, INSERTED.StandardTimeMinutes, INSERTED.ToleranceMinutes, INSERTED.Description, INSERTED.IsActive, INSERTED.CreatedAt, INSERTED.UpdatedAt
                 WHERE Id = :item_id
                 """
@@ -166,7 +315,7 @@ class MasterDataRepository:
                 """
                 UPDATE dbo.tbl_Standard
                 SET IsActive = 0,
-                    UpdatedAt = GETUTCDATE()
+                    UpdatedAt = SYSUTCDATETIME()
                 OUTPUT INSERTED.Id, INSERTED.Name, INSERTED.StandardTimeMinutes, INSERTED.ToleranceMinutes, INSERTED.Description, INSERTED.IsActive, INSERTED.CreatedAt, INSERTED.UpdatedAt
                 WHERE Id = :item_id
                 """
@@ -233,7 +382,7 @@ class MasterDataRepository:
                     OperationTypeId = :operation_type_id,
                     StandardId = :standard_id,
                     IsActive = :is_active,
-                    UpdatedAt = GETUTCDATE()
+                    UpdatedAt = SYSUTCDATETIME()
                 OUTPUT INSERTED.Id
                 WHERE Id = :item_id
                 """
@@ -256,7 +405,7 @@ class MasterDataRepository:
                 """
                 UPDATE dbo.tbl_BusinessRule
                 SET IsActive = 0,
-                    UpdatedAt = GETUTCDATE()
+                    UpdatedAt = SYSUTCDATETIME()
                 OUTPUT INSERTED.Id
                 WHERE Id = :item_id
                 """
@@ -308,17 +457,11 @@ class MasterDataRepository:
                 u.IsActive,
                 u.CreatedAt,
                 u.UpdatedAt,
-                STUFF(
-                    (
-                        SELECT ',' + r2.Code
-                        FROM dbo.tbl_UserRole ur2
-                        INNER JOIN dbo.tbl_Role r2 ON r2.Id = ur2.RoleId
-                        WHERE ur2.UserId = u.Id
-                        FOR XML PATH(''), TYPE
-                    ).value('.', 'NVARCHAR(MAX)'),
-                    1,
-                    1,
-                    ''
+                (
+                    SELECT STRING_AGG(r2.Code, ',')
+                    FROM dbo.tbl_UserRole ur2
+                    INNER JOIN dbo.tbl_Role r2 ON r2.Id = ur2.RoleId
+                    WHERE ur2.UserId = u.Id
                 ) AS Roles
             FROM dbo.tbl_User u
             WHERE u.IsDeleted = 0
@@ -377,7 +520,7 @@ class MasterDataRepository:
                 SET Name = :name,
                     Email = :email,
                     IsActive = :is_active,
-                    UpdatedAt = GETUTCDATE()
+                    UpdatedAt = SYSUTCDATETIME()
                 WHERE Id = :user_id
                   AND IsDeleted = 0
                 """
@@ -397,7 +540,7 @@ class MasterDataRepository:
                 """
                 UPDATE dbo.tbl_User
                 SET PasswordHash = :password_hash,
-                    UpdatedAt = GETUTCDATE()
+                    UpdatedAt = SYSUTCDATETIME()
                 WHERE Id = :user_id
                 """
             ),
@@ -419,7 +562,7 @@ class MasterDataRepository:
                 UPDATE dbo.tbl_User
                 SET IsActive = 0,
                     IsDeleted = 1,
-                    UpdatedAt = GETUTCDATE()
+                    UpdatedAt = SYSUTCDATETIME()
                 WHERE Id = :user_id
                   AND IsDeleted = 0
                 """
@@ -439,17 +582,11 @@ class MasterDataRepository:
                     u.IsActive,
                     u.CreatedAt,
                     u.UpdatedAt,
-                    STUFF(
-                        (
-                            SELECT ',' + r2.Code
-                            FROM dbo.tbl_UserRole ur2
-                            INNER JOIN dbo.tbl_Role r2 ON r2.Id = ur2.RoleId
-                            WHERE ur2.UserId = u.Id
-                            FOR XML PATH(''), TYPE
-                        ).value('.', 'NVARCHAR(MAX)'),
-                        1,
-                        1,
-                        ''
+                    (
+                        SELECT STRING_AGG(r2.Code, ',')
+                        FROM dbo.tbl_UserRole ur2
+                        INNER JOIN dbo.tbl_Role r2 ON r2.Id = ur2.RoleId
+                        WHERE ur2.UserId = u.Id
                     ) AS Roles
                 FROM dbo.tbl_User u
                 WHERE u.Id = :user_id

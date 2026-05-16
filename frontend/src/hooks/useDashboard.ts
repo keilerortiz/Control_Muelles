@@ -4,6 +4,7 @@ import type {
   DashboardKpisTimeline,
   DashboardParams,
   DashboardSummary,
+  LogisticsDashboard,
   OperatorPerformanceResponse,
 } from "../domain/types/dashboard";
 
@@ -39,6 +40,21 @@ export function useDashboardKpisTimeline(params: DashboardParams, options: UseDa
     refetchOnWindowFocus: false,
     meta: {
       userErrorMessage: "Error loading timeline data",
+    },
+  });
+}
+
+export function useLogisticsDashboard(params: DashboardParams, options: UseDashboardOptions = {}) {
+  const refetchInterval = options.refetchIntervalMs ?? (options.realtimeConnected ? false : 10_000);
+  return useQuery<LogisticsDashboard>({
+    queryKey: ["logistics-dashboard", params],
+    queryFn: () => dashboardService.logistics(params),
+    refetchInterval,
+    refetchIntervalInBackground: false,
+    staleTime: 5_000,
+    refetchOnWindowFocus: false,
+    meta: {
+      userErrorMessage: "Error loading logistics dashboard",
     },
   });
 }

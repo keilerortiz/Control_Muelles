@@ -18,9 +18,24 @@ function toIdValue(value: unknown): string | number {
 }
 
 export function buildInitialForm(tabKey: CatalogTabKey, item: MasterRow | null): MasterFormState {
+  if (tabKey === "operators") {
+    return {
+      name: item?.Name || "",
+      reasonType: "",
+      operatorLevel: String(item?.OperatorLevel || "JUNIOR"),
+      description: "",
+      email: "",
+      password: "",
+      roleCodes: [],
+      isActive: item?.IsActive ?? true,
+    };
+  }
+
   if (tabKey === "operationTypes") {
     return {
       name: item?.Name || "",
+      reasonType: "",
+      operatorLevel: "",
       standardTimeMinutes: item?.StandardTimeMinutes || 60,
       toleranceMinutes: 0,
       description: "",
@@ -34,6 +49,8 @@ export function buildInitialForm(tabKey: CatalogTabKey, item: MasterRow | null):
   if (tabKey === "standards") {
     return {
       name: item?.Name || "",
+      reasonType: "",
+      operatorLevel: "",
       standardTimeMinutes: item?.StandardTimeMinutes || 60,
       toleranceMinutes: item?.ToleranceMinutes || 0,
       description: item?.Description || "",
@@ -47,6 +64,8 @@ export function buildInitialForm(tabKey: CatalogTabKey, item: MasterRow | null):
   if (tabKey === "users") {
     return {
       name: item?.Name || "",
+      reasonType: "",
+      operatorLevel: "",
       email: item?.Email || "",
       password: "",
       roleCodes: toStringArray(item?.roleCodes),
@@ -55,8 +74,23 @@ export function buildInitialForm(tabKey: CatalogTabKey, item: MasterRow | null):
     };
   }
 
+  if (tabKey === "nonComplianceReasons") {
+    return {
+      name: item?.Name || "",
+      reasonType: String(item?.ReasonType || "OTC"),
+      operatorLevel: "",
+      description: "",
+      email: "",
+      password: "",
+      roleCodes: [],
+      isActive: item?.IsActive ?? true,
+    };
+  }
+
   return {
     name: item?.Name || "",
+    reasonType: "",
+    operatorLevel: "",
     description: "",
     email: "",
     password: "",
@@ -66,6 +100,22 @@ export function buildInitialForm(tabKey: CatalogTabKey, item: MasterRow | null):
 }
 
 export function buildPayload(tabKey: CatalogTabKey, form: MasterFormState, isEditing: boolean): Record<string, unknown> {
+  if (tabKey === "operators") {
+    return {
+      name: form.name.trim(),
+      operatorLevel: String(form.operatorLevel || "").trim().toUpperCase(),
+      isActive: Boolean(form.isActive),
+    };
+  }
+
+  if (tabKey === "nonComplianceReasons") {
+    return {
+      name: form.name.trim(),
+      reasonType: String(form.reasonType || "").trim().toUpperCase(),
+      isActive: Boolean(form.isActive),
+    };
+  }
+
   if (tabKey === "operationTypes") {
     return {
       name: form.name.trim(),
@@ -107,6 +157,26 @@ export function buildPayload(tabKey: CatalogTabKey, form: MasterFormState, isEdi
 }
 
 export function validateForm(tabKey: CatalogTabKey, form: MasterFormState, isEditing: boolean): string {
+  if (tabKey === "operators") {
+    if (!form.name?.trim()) {
+      return "El nombre es obligatorio.";
+    }
+    if (!form.operatorLevel || !["JUNIOR", "SENIOR"].includes(String(form.operatorLevel).toUpperCase())) {
+      return "Selecciona un nivel válido para el operario.";
+    }
+    return "";
+  }
+
+  if (tabKey === "nonComplianceReasons") {
+    if (!form.name?.trim()) {
+      return "El nombre es obligatorio.";
+    }
+    if (!form.reasonType || !["OTC", "OTS"].includes(String(form.reasonType).toUpperCase())) {
+      return "Selecciona un tipo de causal válido.";
+    }
+    return "";
+  }
+
   if (tabKey === "users") {
     const normalizedPassword = form.password?.trim() || "";
     if (!form.name.trim() || !form.email.trim() || form.roleCodes.length !== 1) {

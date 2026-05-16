@@ -38,6 +38,11 @@ export interface AppointmentActionFormState {
   otsNonComplianceReasons: string[];
   nonComplianceComment: string;
   cancellationReason: string;
+  arrivalAt: string;
+  documentDeliveryAt: string;
+  processStartAt: string;
+  processEndAt: string;
+  standardTimeMinutes: number;
   [key: string]: unknown;
 }
 
@@ -103,8 +108,11 @@ export function getFinalizeNonComplianceState(appointment?: AppointmentDetail | 
   const processEndAt = toDate(appointment?.ProcessEndAt);
   const standardTimeMinutes = Number(appointment?.StandardTimeMinutes ?? 0);
 
-  if (!scheduledAt || !arrivalAt || !documentDeliveryAt || !processStartAt || !processEndAt) {
-    return { otcFail: false, otsFail: false, hasNonCompliance: false };
+  // Si faltan fechas críticas, no podemos calcular. 
+  // Pero si el estado es PARA_FIRMAR o superior, debería tenerlas.
+  // Si no las tiene, es probable que la data esté incompleta/stale.
+  if (!scheduledAt || !arrivalAt || !documentDeliveryAt || !processStartAt) {
+    return { otcFail: false, otsFail: false, hasNonCompliance: false, isStale: true };
   }
 
   const cumpleCitaLimit = new Date(scheduledAt.getTime() + 15 * 60 * 1000);
@@ -113,13 +121,17 @@ export function getFinalizeNonComplianceState(appointment?: AppointmentDetail | 
   const otcLimit = new Date(baseTime.getTime() + 35 * 60 * 1000);
   const otcFail = cumpleCita && documentDeliveryAt > otcLimit;
 
-  const otsMinutes = getSqlMinuteDiff(processStartAt, processEndAt);
-  const otsFail = standardTimeMinutes > 0 && otsMinutes > standardTimeMinutes;
+  let otsFail = false;
+  if (processEndAt) {
+    const otsMinutes = getSqlMinuteDiff(processStartAt, processEndAt);
+    otsFail = standardTimeMinutes > 0 && otsMinutes > standardTimeMinutes;
+  }
 
   return {
     otcFail,
     otsFail,
     hasNonCompliance: otcFail || otsFail,
+    isStale: !processEndAt && (appointment?.Status === "PARA_FIRMAR" || appointment?.Status === "FINALIZADO"),
   };
 }
 
@@ -163,6 +175,12 @@ export function buildInitialForm(
     otsNonComplianceReasons: parseNonComplianceReasons(appointment?.OtsNonComplianceReason),
     nonComplianceComment: toText(appointment?.NonComplianceComment),
     cancellationReason: toText(appointment?.CancellationReason),
+    // Operational fields for calculation
+    arrivalAt: toText(appointment?.ArrivalAt),
+    documentDeliveryAt: toText(appointment?.DocumentDeliveryAt),
+    processStartAt: toText(appointment?.ProcessStartAt),
+    processEndAt: toText(appointment?.ProcessEndAt),
+    standardTimeMinutes: Number(appointment?.StandardTimeMinutes ?? 0),
   };
 }
 
@@ -218,12 +236,30 @@ export function buildPayloadByAction(
       precincts: form.precincts.trim(),
     },
     toSign: {},
-    finalize: {
-      movedWeightKg: Number(form.movedWeightKg),
-      otcNonComplianceReason: serializeNonComplianceReasons(form.otcNonComplianceReasons),
-      otsNonComplianceReason: serializeNonComplianceReasons(form.otsNonComplianceReasons),
-      nonComplianceComment: form.nonComplianceComment.trim() || null,
-    },
+    finalize: (() => {
+      const nonCompliance = getFinalizeNonComplianceState({
+        ...form,
+        ScheduledAt: form.scheduledAt,
+        ArrivalAt: form.arrivalAt,
+        DocumentDeliveryAt: form.documentDeliveryAt,
+        ProcessStartAt: form.processStartAt,
+        ProcessEndAt: form.processEndAt,
+        StandardTimeMinutes: form.standardTimeMinutes,
+      } as any);
+
+      return {
+        movedWeightKg: Number(form.movedWeightKg),
+        otcNonComplianceReason: nonCompliance.otcFail
+          ? serializeNonComplianceReasons(form.otcNonComplianceReasons)
+          : null,
+        otsNonComplianceReason: nonCompliance.otsFail
+          ? serializeNonComplianceReasons(form.otsNonComplianceReasons)
+          : null,
+        nonComplianceComment: nonCompliance.hasNonCompliance
+          ? form.nonComplianceComment.trim() || null
+          : null,
+      };
+    })(),
     checkout: {},
     cancel: { cancellationReason: form.cancellationReason.trim() },
   };

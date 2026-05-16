@@ -1,4 +1,6 @@
 import asyncio
+import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,9 +20,16 @@ from app.middleware.request_context import RequestContextMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.websocket.manager import ws_manager
 
-configure_logging()
+logger = logging.getLogger(__name__)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    configure_logging()
+    yield
+    await engine.dispose()
 
 app = FastAPI(
+    lifespan=lifespan,
     title=settings.app_name,
     debug=settings.app_debug,
     docs_url="/docs" if settings.docs_enabled else None,
@@ -63,6 +72,7 @@ async def ready() -> JSONResponse:
 
         await asyncio.wait_for(check_database(), timeout=settings.db_health_timeout_seconds)
     except Exception:
+        logger.exception("Unexpected error while checking database readiness")
         return JSONResponse(
             status_code=503,
             content={"status": "DOWN", "database": "DISCONNECTED"},
@@ -77,4 +87,5 @@ async def dashboard_socket(websocket: WebSocket) -> None:
         while True:
             await websocket.receive_text()
     except Exception:
+        logger.exception("Unexpected error in dashboard WebSocket")
         ws_manager.disconnect(websocket)

@@ -1,4 +1,4 @@
-import { FilterX } from "lucide-react";
+import { CirclePlus, FilterX } from "lucide-react";
 
 import { appointmentStatuses, statusLabels, actionLabels } from "../../domain/appointmentsConfig";
 import { Button } from "../../components/ui/Button";
@@ -16,7 +16,6 @@ export function AppointmentFiltersBar({
   clientOptions,
   operationOptions,
   onSearchChange,
-  onSearchSubmit,
   onStatusChange,
   onClientFilterChange,
   onOperationFilterChange,
@@ -30,9 +29,6 @@ export function AppointmentFiltersBar({
           aria-label="Buscar por cliente o placa"
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") onSearchSubmit();
-          }}
           placeholder="Buscar por cliente o placa"
           className="min-h-10 min-w-[220px] flex-1 rounded-lg border-neutral-200 bg-white lg:min-w-[280px]"
         />
@@ -60,7 +56,11 @@ export function AppointmentFiltersBar({
           <FilterX className="h-4 w-4" strokeWidth={1.75} />
         </Button>
         {canCreate ? (
-          <Button className="min-h-10 rounded-lg bg-neutral-950 px-4 text-sm font-semibold text-white shadow-sm hover:bg-neutral-800 lg:flex-none" onClick={onCreate}>
+          <Button
+            className="min-h-10 rounded-lg bg-neutral-950 px-4 text-sm font-semibold text-white shadow-sm hover:bg-neutral-800 lg:flex-none"
+            onClick={onCreate}
+            leftIcon={<CirclePlus />}
+          >
             {actionLabels.create}
           </Button>
         ) : null}

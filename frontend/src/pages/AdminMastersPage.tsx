@@ -1,19 +1,14 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { FormEvent } from "react";
 
-import { Button } from "../components/ui/Button";
-import { Checkbox } from "../components/ui/Checkbox";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { ErrorState } from "../components/ui/ErrorState";
-import { Input } from "../components/ui/Input";
 import { Loader } from "../components/ui/Loader";
-import { Modal, ModalFooter } from "../components/ui/Modal";
-import { Select } from "../components/ui/Select";
 import { getErrorMessage, getQueryErrorMessage } from "../domain/appointmentsConfig";
 import { useMasterCatalogs, useMasterMutations } from "../hooks/useMasters";
-import type { MasterCatalogs } from "../domain/types/masters";
 import { tabDefinitions, tabResourceByKey } from "./adminMasters/config";
+import { EMPTY_MASTER_CATALOGS } from "./adminMasters/defaultCatalogs";
 import {
   buildInitialForm,
   buildInitialRuleForm,
@@ -24,14 +19,11 @@ import {
 import type { MasterFieldValue, MasterRow, TabKey } from "./adminMasters/types";
 import { PAGE_SIZE } from "./adminMasters/types";
 import { BusinessRulesSection } from "./adminMasters/BusinessRulesSection";
+import { BusinessRuleModal } from "./adminMasters/BusinessRuleModal";
 import { MasterCatalogSection } from "./adminMasters/MasterCatalogSection";
+import { MasterRecordModal } from "./adminMasters/MasterRecordModal";
+import { getRuleValidationError } from "./adminMasters/ruleValidation";
 import { syncCatalogsAfterRuleSave } from "./adminMasters/cacheSync";
-
-const MasterFormFields = lazy(() =>
-  import("../components/domain/adminMasters/MasterFormFields").then((module) => ({
-    default: module.MasterFormFields,
-  })),
-);
 
 export function AdminMastersPage() {
   const queryClient = useQueryClient();
@@ -53,20 +45,15 @@ export function AdminMastersPage() {
   const [rulePage, setRulePage] = useState(1);
   const [masterPage, setMasterPage] = useState(1);
 
-  const catalogs = catalogsQuery.data || {
-    clients: [],
-    vehicleTypes: [],
-    operationTypes: [],
-    standards: [],
-    users: [],
-    businessRules: [],
-    roles: [],
-  };
+  const catalogs = catalogsQuery.data || EMPTY_MASTER_CATALOGS;
 
   const rows = (catalogs[activeTab] as MasterRow[] | undefined) || [];
-  const pagedRows = rows.slice((masterPage - 1) * PAGE_SIZE, masterPage * PAGE_SIZE);
+  const safeMasterPage = Math.min(masterPage, Math.max(1, Math.ceil(rows.length / PAGE_SIZE)));
+  const pagedRows = rows.slice((safeMasterPage - 1) * PAGE_SIZE, safeMasterPage * PAGE_SIZE);
+
   const ruleRows = (catalogs.businessRules as MasterRow[] | undefined) || [];
-  const pagedRuleRows = ruleRows.slice((rulePage - 1) * PAGE_SIZE, rulePage * PAGE_SIZE);
+  const safeRulePage = Math.min(rulePage, Math.max(1, Math.ceil(ruleRows.length / PAGE_SIZE)));
+  const pagedRuleRows = ruleRows.slice((safeRulePage - 1) * PAGE_SIZE, safeRulePage * PAGE_SIZE);
   const currentTab = tabDefinitions.find((tab) => tab.value === activeTab);
   const currentResource = tabResourceByKey[activeTab];
 
@@ -90,33 +77,9 @@ export function AdminMastersPage() {
     setRuleModalOpen(false);
   };
 
-  const validateRuleForm = () => {
-    if (!ruleFormState.clientId || !ruleFormState.vehicleTypeId || !ruleFormState.operationTypeId || !ruleFormState.standardTimeMinutes) {
-      return "Completa todos los campos obligatorios.";
-    }
-    if (Number(ruleFormState.standardTimeMinutes) <= 0) {
-      return "El tiempo estándar debe ser mayor a 0.";
-    }
-
-    const duplicate = (catalogs.businessRules || []).find((rule) => {
-      if (editingRule && rule.Id === editingRule.Id) return false;
-      return (
-        rule.IsActive &&
-        Number(rule.ClientId) === Number(ruleFormState.clientId) &&
-        Number(rule.VehicleTypeId) === Number(ruleFormState.vehicleTypeId) &&
-        Number(rule.OperationTypeId) === Number(ruleFormState.operationTypeId)
-      );
-    });
-    if (duplicate) {
-      return "Ya existe una regla activa para esa combinación cliente + vehículo + operación.";
-    }
-
-    return "";
-  };
-
   const handleRuleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const validationError = validateRuleForm();
+    const validationError = getRuleValidationError(catalogs, editingRule, ruleFormState);
     if (validationError) {
       setRuleFormError(validationError);
       return;
@@ -267,20 +230,6 @@ export function AdminMastersPage() {
     setMasterPage(1);
   }, [activeTab]);
 
-  useEffect(() => {
-    const totalMasterPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-    if (masterPage > totalMasterPages) {
-      setMasterPage(totalMasterPages);
-    }
-  }, [masterPage, rows.length]);
-
-  useEffect(() => {
-    const totalRulePages = Math.max(1, Math.ceil(ruleRows.length / PAGE_SIZE));
-    if (rulePage > totalRulePages) {
-      setRulePage(totalRulePages);
-    }
-  }, [rulePage, ruleRows.length]);
-
   if (catalogsQuery.isLoading && !catalogsQuery.data) {
     return (
       <div className="flex items-center justify-center py-10">
@@ -307,7 +256,7 @@ export function AdminMastersPage() {
       <BusinessRulesSection
         ruleRows={ruleRows}
         pagedRuleRows={pagedRuleRows}
-        rulePage={rulePage}
+        rulePage={safeRulePage}
         onRulePageChange={setRulePage}
         onCreateRule={openCreateRule}
         onEditRule={openEditRule}
@@ -317,7 +266,7 @@ export function AdminMastersPage() {
         activeTab={activeTab}
         rows={rows}
         pagedRows={pagedRows}
-        masterPage={masterPage}
+        masterPage={safeMasterPage}
         onMasterPageChange={setMasterPage}
         onActiveTabChange={setActiveTab}
         onCreateMaster={openCreateMaster}
@@ -325,122 +274,31 @@ export function AdminMastersPage() {
         onAskDeleteMaster={setConfirmDelete}
       />
 
-      <Modal
+      <BusinessRuleModal
         open={ruleModalOpen}
+        editingRule={editingRule}
+        catalogs={catalogs}
+        formState={ruleFormState}
+        error={ruleFormError}
+        isPending={mutations.create.isPending || mutations.update.isPending}
         onClose={closeRuleModal}
-        title={editingRule ? "Editar regla" : "Nueva regla"}
-        size="lg"
-      >
-        <form className="space-y-4" onSubmit={handleRuleSubmit}>
-          <div className="grid gap-4 md:grid-cols-2">
-            <Select
-              label="Cliente"
-              value={ruleFormState.clientId}
-              onChange={(event) => setRuleFormState((current) => ({ ...current, clientId: event.target.value }))}
-              disabled={Boolean(editingRule)}
-            >
-              <option value="">Seleccione</option>
-              {(catalogs.clients || []).map((item) => (
-                <option key={item.Id} value={item.Id}>
-                  {item.Name}
-                </option>
-              ))}
-            </Select>
+        onSubmit={handleRuleSubmit}
+        onChange={setRuleFormState}
+      />
 
-            <Select
-              label="Tipo de vehículo"
-              value={ruleFormState.vehicleTypeId}
-              onChange={(event) => setRuleFormState((current) => ({ ...current, vehicleTypeId: event.target.value }))}
-              disabled={Boolean(editingRule)}
-            >
-              <option value="">Seleccione</option>
-              {(catalogs.vehicleTypes || []).map((item) => (
-                <option key={item.Id} value={item.Id}>
-                  {item.Name}
-                </option>
-              ))}
-            </Select>
-
-            <Select
-              label="Tipo de operación"
-              value={ruleFormState.operationTypeId}
-              onChange={(event) => setRuleFormState((current) => ({ ...current, operationTypeId: event.target.value }))}
-              disabled={Boolean(editingRule)}
-            >
-              <option value="">Seleccione</option>
-              {(catalogs.operationTypes || []).map((item) => (
-                <option key={item.Id} value={item.Id}>
-                  {item.Name}
-                </option>
-              ))}
-            </Select>
-
-            <Input
-              label="Tiempo estándar (min)"
-              type="number"
-              min="1"
-              value={ruleFormState.standardTimeMinutes}
-              onChange={(event) => setRuleFormState((current) => ({ ...current, standardTimeMinutes: event.target.value }))}
-            />
-
-            <div className="md:col-span-2">
-              <Checkbox
-                label="Regla activa"
-                checked={ruleFormState.isActive}
-                onChange={(event) => setRuleFormState((current) => ({ ...current, isActive: event.target.checked }))}
-              />
-            </div>
-          </div>
-
-          {ruleFormError ? (
-            <div className="rounded-lg border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-700">
-              {ruleFormError}
-            </div>
-          ) : null}
-
-          <ModalFooter className="gap-3">
-            <Button type="button" variant="secondary" onClick={closeRuleModal}>
-              Cerrar
-            </Button>
-            <Button type="submit" disabled={mutations.create.isPending || mutations.update.isPending}>
-              {mutations.create.isPending || mutations.update.isPending ? "Guardando..." : "Guardar"}
-            </Button>
-          </ModalFooter>
-        </form>
-      </Modal>
-
-      <Modal
+      <MasterRecordModal
         open={formOpen}
+        tabKey={activeTab}
+        currentLabel={currentTab?.label || "registro"}
+        editingItem={editingItem}
+        formState={formState}
+        catalogs={catalogs}
+        error={formError}
+        isPending={mutations.create.isPending || mutations.update.isPending}
         onClose={closeMasterForm}
-        title={`${editingItem ? "Editar" : "Crear"} ${currentTab?.label || "registro"}`}
-        size="lg"
-      >
-        <form className="space-y-4" onSubmit={handleMasterSubmit}>
-          <Suspense fallback={<div className="rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-600">Cargando formulario...</div>}>
-            <MasterFormFields
-              tabKey={activeTab}
-              form={formState}
-              catalogs={catalogs}
-              updateValue={(field: string, value: MasterFieldValue) => setFormState((current) => ({ ...current, [field]: value }))}
-            />
-          </Suspense>
-
-          {formError ? (
-            <div className="rounded-lg border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-700">
-              {formError}
-            </div>
-          ) : null}
-
-          <ModalFooter className="gap-3">
-            <Button type="button" variant="secondary" onClick={closeMasterForm}>
-              Cerrar
-            </Button>
-            <Button type="submit" disabled={mutations.create.isPending || mutations.update.isPending}>
-              {mutations.create.isPending || mutations.update.isPending ? "Guardando..." : "Guardar"}
-            </Button>
-          </ModalFooter>
-        </form>
-      </Modal>
+        onSubmit={handleMasterSubmit}
+        onUpdateValue={(field: string, value: MasterFieldValue) => setFormState((current) => ({ ...current, [field]: value }))}
+      />
 
       <ConfirmDialog
         open={Boolean(ruleConfirmDelete)}

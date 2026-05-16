@@ -1,3 +1,6 @@
+SET QUOTED_IDENTIFIER ON;
+GO
+
 INSERT INTO dbo.tbl_Role (Code, Name)
 VALUES
     ('PLANEADOR', 'Planeador'),
@@ -53,6 +56,19 @@ VALUES
     ('Cross-docking Tractomula', 95, 12, 'Tiempo estandar para cross-docking con tractomula');
 
 INSERT INTO dbo.tbl_Dock (Name) VALUES ('Muelle 1'), ('Muelle 2'), ('Muelle 3');
+
+INSERT INTO dbo.tbl_NonComplianceReason (Name, ReasonType)
+VALUES
+    ('Documentación incompleta en portería', 'OTC'),
+    ('Validación documental demorada', 'OTC'),
+    ('Congestión en portería', 'OTC'),
+    ('Novedad de seguridad en acceso', 'OTC'),
+    ('Falla de sistema en registro de ingreso', 'OTC'),
+    ('Demora por disponibilidad de muelle', 'OTS'),
+    ('Demora por disponibilidad de operarios', 'OTS'),
+    ('Novedad operativa durante el proceso', 'OTS'),
+    ('Equipos o recursos no disponibles', 'OTS'),
+    ('Retraso por re-trabajo de operación', 'OTS');
 
 INSERT INTO dbo.tbl_Operator (Name, OperatorLevel) VALUES
     ('Operario Senior 1', 'SENIOR'),

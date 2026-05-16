@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     db_password: str | None = None
     db_password_file: str | None = None
     db_driver: str = "ODBC Driver 18 for SQL Server"
+    db_encrypt: bool = False
     db_trust_server_certificate: bool = True
     db_pool_size: int = Field(default=10, ge=1)
     db_max_overflow: int = Field(default=20, ge=0)
@@ -35,7 +36,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
     seed_admin_email: str = "admin@muelles.local"
-    seed_admin_password: str | None = "Admin123!"
+    seed_admin_password: str | None = None
     seed_admin_password_file: str | None = None
 
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
@@ -51,31 +52,39 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def resolve_secret_files(self) -> "Settings":
-        self.db_password = self._resolve_secret(
-            "DB_PASSWORD", self.db_password, self.db_password_file
-        )
-        self.jwt_secret = self._resolve_secret("JWT_SECRET", self.jwt_secret, self.jwt_secret_file)
+        self.db_password = self._resolve_secret(self.db_password, self.db_password_file)
+        if not self.db_password:
+            raise ValueError("DB_PASSWORD or DB_PASSWORD_FILE must be configured")
+
+        self.jwt_secret = self._resolve_secret(self.jwt_secret, self.jwt_secret_file)
+        if not self.jwt_secret:
+            raise ValueError("JWT_SECRET or JWT_SECRET_FILE must be configured")
+
         self.refresh_token_secret = self._resolve_secret(
-            "REFRESH_TOKEN_SECRET",
             self.refresh_token_secret,
             self.refresh_token_secret_file,
         )
+        if not self.refresh_token_secret:
+            raise ValueError("REFRESH_TOKEN_SECRET or REFRESH_TOKEN_SECRET_FILE must be configured")
+
         self.seed_admin_password = self._resolve_secret(
-            "SEED_ADMIN_PASSWORD",
             self.seed_admin_password,
             self.seed_admin_password_file,
+            default="Admin123!"
         )
         return self
 
     @staticmethod
-    def _resolve_secret(name: str, value: str | None, file_path: str | None) -> str:
-        if value:
+    def _resolve_secret(value: str | None, file_path: str | None, default: str | None = None) -> str | None:
+        if value not in (None, ""):
             return value
+
         if file_path:
-            secret = Path(file_path).read_text(encoding="utf-8").strip()
-            if secret:
-                return secret
-        raise ValueError(f"{name} or {name}_FILE must be configured")
+            secret_path = Path(file_path)
+            if secret_path.exists():
+                return secret_path.read_text(encoding="utf-8").strip()
+
+        return default
 
     @property
     def is_production(self) -> bool:
@@ -103,6 +112,7 @@ class Settings(BaseSettings):
         query = urlencode(
             {
                 "driver": self.db_driver,
+                "Encrypt": "yes" if self.db_encrypt else "no",
                 "TrustServerCertificate": "yes" if self.db_trust_server_certificate else "no",
             }
         )

@@ -1,18 +1,34 @@
 import type { Appointment } from "../../domain/types/appointments";
 
 export type ConsultorAppointmentRow = Appointment & {
-  MovedWeightKg?: number | string;
-  EstimatedTons?: number | string;
+  ScheduledAt?: string | number | Date | null;
+  ArrivalAt?: string | number | Date | null;
+  DocumentDeliveryAt?: string | number | Date | null;
+  ProcessStartAt?: string | number | Date | null;
+  ProcessEndAt?: string | number | Date | null;
+  StandardTimeMinutes?: number | string | null;
+  ClientName?: string | null;
+  clientName?: string | null;
+  OperationTypeName?: string | null;
+  OperationType?: string | null;
+  MovedWeightKg?: number | string | null;
+  EstimatedTons?: number | string | null;
   OtcNonComplianceReason?: string | null;
   OtsNonComplianceReason?: string | null;
   NonComplianceComment?: string | null;
-  ProcessStartAt?: string | null;
-  ProcessEndAt?: string | null;
-  StandardTimeMinutes?: number | string;
   DockName?: string | null;
   SeniorOperators?: string | null;
   JuniorOperators?: string | null;
 };
+
+function safeDate(value: unknown): Date | null {
+  if (value instanceof Date) return value;
+  if (typeof value === "string" || typeof value === "number") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  return null;
+}
 
 export interface ConsultorOperatorMetric {
   name: string;
@@ -22,26 +38,15 @@ export interface ConsultorOperatorMetric {
 }
 
 function getRowStatus(row: ConsultorAppointmentRow): string {
-  const record = row as Record<string, unknown>;
   return String(
-    record.Status
-    ?? record.status
-    ?? record.AppointmentStatus
-    ?? record.appointmentStatus
-    ?? "",
+    row.Status ||
+    (row as Record<string, unknown>).status ||
+    ""
   ).toUpperCase();
 }
 
 function getStandardMinutes(row: ConsultorAppointmentRow): number {
-  const record = row as Record<string, unknown>;
-  const raw =
-    record.StandardTimeMinutes
-    ?? record.standardTimeMinutes
-    ?? record.StandardMinutes
-    ?? record.standardMinutes
-    ?? record.OperationStandardMinutes
-    ?? record.operationStandardMinutes
-    ?? 0;
+  const raw = row.StandardTimeMinutes ?? 0;
   const value = Number(raw);
   return Number.isFinite(value) ? value : 0;
 }
@@ -54,75 +59,125 @@ function splitOperatorNames(value: unknown): string[] {
 }
 
 export function buildConsultorMetrics(rows: ConsultorAppointmentRow[] = []) {
-  const nowMs = Date.now();
   const totalMovedWeightKg = rows.reduce((accumulator, row) => {
     const movedWeightKg = Number(row.MovedWeightKg || 0);
     return accumulator + (Number.isFinite(movedWeightKg) ? movedWeightKg : 0);
   }, 0);
-  const totalVolumeTon = totalMovedWeightKg / 1000;
+  const totalVolumeTon = totalMovedWeightKg;
 
-  const nonCompliances = rows.filter((row) => {
-    if (row.OtcNonComplianceReason || row.OtsNonComplianceReason || row.NonComplianceComment) return true;
-    if (!row.ProcessStartAt || !row.ProcessEndAt || !row.StandardTimeMinutes) return false;
-    const startedAt = new Date(row.ProcessStartAt);
-    const endedAt = new Date(row.ProcessEndAt);
-    const elapsedMinutes = Math.max((endedAt.getTime() - startedAt.getTime()) / 60000, 0);
-    return elapsedMinutes > Number(row.StandardTimeMinutes);
-  }).length;
+  let attendedCount = 0;
+  let inServiceCount = 0;
+  const volumeByClient: Record<string, number> = {};
+  const otsByOperationType: Record<string, { compliant: number; total: number }> = {};
+  const nonComplianceReasons: Record<string, number> = {};
+  const otcStats = { compliant: 0, total: 0 };
 
-  const operatorAccumulator = rows.reduce<
-    Record<string, { name: string; role: "Senior" | "Junior"; executedMinutes: number; compliant: number; total: number }>
-  >((accumulator, row) => {
-    const startedAt = row.ProcessStartAt ? new Date(row.ProcessStartAt) : null;
-    const endedAt = row.ProcessEndAt ? new Date(row.ProcessEndAt) : null;
-    const hasStart = Boolean(startedAt && !Number.isNaN(startedAt.getTime()));
-    const hasEnd = Boolean(endedAt && !Number.isNaN(endedAt.getTime()));
-    const effectiveEndMs = hasEnd && endedAt ? endedAt.getTime() : nowMs;
-    const elapsedMinutes = hasStart && startedAt
-      ? Math.max((effectiveEndMs - startedAt.getTime()) / 60000, 0)
-      : 0;
-    const standardMinutes = getStandardMinutes(row);
-    const hasOtsNonCompliance = Boolean(String(row.OtsNonComplianceReason || "").trim());
+  rows.forEach((row) => {
     const status = getRowStatus(row);
-    const isParaFirmar = status === "PARA_FIRMAR";
-    const isClosedStatus = status === "FINALIZADO" || status === "ATENDIDA";
-    const isEvaluableStatus = isParaFirmar || isClosedStatus;
-    const hasEvaluableOtsResult = isEvaluableStatus && hasStart && standardMinutes > 0;
-    const isCompliantByTime = hasEvaluableOtsResult ? elapsedMinutes <= standardMinutes : false;
-    const isCompliant = hasOtsNonCompliance ? false : isCompliantByTime;
-    const registerOperator = (name: string, role: "Senior" | "Junior") => {
-      const key = `${role}:${name}`;
-      const current = accumulator[key] || { name, role, executedMinutes: 0, compliant: 0, total: 0 };
-      current.executedMinutes += elapsedMinutes;
-      if (hasEvaluableOtsResult) {
-        current.total += 1;
-        if (isCompliant) current.compliant += 1;
+
+    // 1. Conteos por estado
+    if (status === "ATENDIDA" || status === "FINALIZADO") {
+      attendedCount++;
+    } else if (["ENTREGA_DOCUMENTOS", "EN_PROCESO", "PARA_FIRMAR"].includes(status)) {
+      inServiceCount++;
+    }
+
+    // 2. Volumen por cliente
+    const clientName = String(row.ClientName || (row as any).clientName || "Otro");
+    const weight = Number(row.MovedWeightKg || 0);
+    volumeByClient[clientName] = (volumeByClient[clientName] || 0) + weight / 1000;
+
+    // 3. OTC (Cumplimiento de Atención Inicial)
+    const scheduledAt = safeDate(row.ScheduledAt);
+    const arrivalAt = safeDate(row.ArrivalAt);
+    const documentDeliveryAt = safeDate(row.DocumentDeliveryAt);
+
+    if (scheduledAt && arrivalAt && documentDeliveryAt) {
+      // Cumple cita: llega hasta 15 min después de lo programado
+      const arrivalLimit = new Date(scheduledAt.getTime() + 15 * 60 * 1000);
+      const compliesArrival = arrivalAt <= arrivalLimit;
+
+      if (compliesArrival) {
+        // Base de cálculo: si llegó antes, cuenta desde la hora programada. Si llegó tarde (pero dentro de los 15), desde que llegó.
+        const baseTimeMs = Math.max(arrivalAt.getTime(), scheduledAt.getTime());
+        const otcLimit = new Date(baseTimeMs + 35 * 60 * 1000);
+
+        otcStats.total += 1;
+        if (documentDeliveryAt <= otcLimit) {
+          otcStats.compliant += 1;
+        }
       }
-      accumulator[key] = current;
-    };
-    splitOperatorNames(row.SeniorOperators).forEach((name) => registerOperator(name, "Senior"));
-    splitOperatorNames(row.JuniorOperators).forEach((name) => registerOperator(name, "Junior"));
-    return accumulator;
-  }, {});
+    }
 
-  const operatorMetrics: ConsultorOperatorMetric[] = Object.values(operatorAccumulator)
-    .map((metric) => ({
-      name: metric.name,
-      role: metric.role,
-      executedMinutes: Math.round(metric.executedMinutes),
-      otsRate: metric.total > 0 ? Math.round((metric.compliant * 100) / metric.total) : 0,
-    }))
-    .sort((left, right) => {
-      if (right.otsRate !== left.otsRate) return right.otsRate - left.otsRate;
-      return right.executedMinutes - left.executedMinutes;
-    });
+    // 4. OTS por tipo de operación (Independiente de cumplimiento de cita)
+    const opType = String(row.OperationTypeName || row.OperationType || "Otro");
+    const processStart = safeDate(row.ProcessStartAt);
+    const processEnd = safeDate(row.ProcessEndAt);
+    const standard = getStandardMinutes(row);
+    const hasOtsReason = Boolean(String(row.OtsNonComplianceReason || "").trim());
 
-  const bestOperator = operatorMetrics[0];
+    if (processStart && processEnd && standard > 0) {
+      const elapsed = Math.max((processEnd.getTime() - processStart.getTime()) / 60000, 0);
+      const isOtsCompliant = !hasOtsReason && elapsed <= standard;
+
+      const stats = otsByOperationType[opType] || { compliant: 0, total: 0 };
+      stats.total += 1;
+      if (isOtsCompliant) stats.compliant += 1;
+      otsByOperationType[opType] = stats;
+    }
+
+    // 5. Distribución de motivos de incumplimiento
+    if (row.OtcNonComplianceReason) {
+      row.OtcNonComplianceReason.split(";").forEach((r) => {
+        const reason = r.trim();
+        if (reason) nonComplianceReasons[reason] = (nonComplianceReasons[reason] || 0) + 1;
+      });
+    }
+    if (row.OtsNonComplianceReason) {
+      row.OtsNonComplianceReason.split(";").forEach((r) => {
+        const reason = r.trim();
+        if (reason) nonComplianceReasons[reason] = (nonComplianceReasons[reason] || 0) + 1;
+      });
+    }
+  });
+
+  const otsByOpTypeData = Object.entries(otsByOperationType).map(([name, stats]) => ({
+    name,
+    rate: Math.round((stats.compliant * 100) / stats.total),
+  })).sort((a, b) => b.rate - a.rate);
+
+  const topClients = Object.entries(volumeByClient)
+    .map(([name, volume]) => ({ name, volume: Number(volume.toFixed(1)) }))
+    .sort((a, b) => b.volume - a.volume)
+    .slice(0, 5);
+
+  const topReasons = Object.entries(nonComplianceReasons)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+
+  // Calcular total de incumplimientos (registrados explícitamente o por tiempo)
+  const nonCompliancesCount = rows.filter((row) => {
+    if (row.OtcNonComplianceReason || row.OtsNonComplianceReason || row.NonComplianceComment) return true;
+    const processStart = safeDate(row.ProcessStartAt);
+    const processEnd = safeDate(row.ProcessEndAt);
+    const standard = getStandardMinutes(row);
+    if (processStart && processEnd && standard > 0) {
+      const elapsed = (processEnd.getTime() - processStart.getTime()) / 60000;
+      return elapsed > standard;
+    }
+    return false;
+  }).length;
 
   return {
     totalVolume: totalVolumeTon.toFixed(1),
-    nonCompliances,
-    bestOperario: bestOperator ? `${bestOperator.name} · ${bestOperator.otsRate}% OTS` : "Sin dato",
-    operatorMetrics,
+    attendedVehicles: attendedCount,
+    inServiceVehicles: inServiceCount,
+    nonCompliances: nonCompliancesCount,
+    otcRate: otcStats.total > 0 ? Math.round((otcStats.compliant * 100) / otcStats.total) : 0,
+    otsByOpTypeData,
+    topClients,
+    topReasons,
   };
 }
+

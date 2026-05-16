@@ -50,8 +50,10 @@ export const appointmentsService = {
     return parseApiData(response.data, appointmentSchema, "appointments.update");
   },
 
-  async remove(appointmentId: number) {
-    const response = await apiClient.delete(`${BASE}/${appointmentId}`);
+  async remove(appointmentId: number, version?: number) {
+    const response = await apiClient.delete(`${BASE}/${appointmentId}`, {
+      params: { version },
+    });
     return parseApiData(response.data, z.unknown(), "appointments.remove");
   },
 

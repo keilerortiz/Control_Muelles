@@ -15,8 +15,9 @@ CREATE OR ALTER PROCEDURE dbo.usp_RevokeRefreshToken
 AS
 BEGIN
     UPDATE dbo.tbl_RefreshToken
-    SET RevokedAt = GETUTCDATE()
-    WHERE TokenHash = @TokenHash AND RevokedAt IS NULL;
+    SET IsRevoked = 1,
+        RevokedAt = SYSUTCDATETIME()
+    WHERE TokenHash = @TokenHash AND IsRevoked = 0;
 END;
 GO
 
@@ -25,7 +26,8 @@ CREATE OR ALTER PROCEDURE dbo.usp_RevokeUserRefreshTokens
 AS
 BEGIN
     UPDATE dbo.tbl_RefreshToken
-    SET RevokedAt = GETUTCDATE()
-    WHERE UserId = @UserId AND RevokedAt IS NULL;
+    SET IsRevoked = 1,
+        RevokedAt = SYSUTCDATETIME()
+    WHERE UserId = @UserId AND IsRevoked = 0;
 END;
 GO

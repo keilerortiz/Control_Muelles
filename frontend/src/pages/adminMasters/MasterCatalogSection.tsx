@@ -1,3 +1,4 @@
+import { PenSquare, Plus, Trash2 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { Table } from "../../components/ui/Table";
@@ -44,9 +45,13 @@ export function MasterCatalogSection({
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="text-base font-semibold text-neutral-800">{tab.label}</h3>
-                <p className="text-sm text-neutral-500">Gestión administrativa de catálogo.</p>
+                <p className="text-sm text-neutral-500">
+                  {tab.value === "nonComplianceReasons"
+                    ? "Gestión administrativa de causales OTC y OTS."
+                    : "Gestión administrativa de catálogo."}
+                </p>
               </div>
-              <Button type="button" onClick={onCreateMaster}>Nuevo registro</Button>
+              <Button type="button" onClick={onCreateMaster} leftIcon={<Plus />}>Nuevo registro</Button>
             </div>
             {rows.length === 0 ? (
               <EmptyState title="Sin registros" description="No hay información cargada para esta pestaña." />
@@ -64,8 +69,8 @@ export function MasterCatalogSection({
                     if (key === "actions") {
                       return (
                         <div className="flex items-center gap-2">
-                          <Button type="button" size="sm" variant="secondary" onClick={() => onEditMaster(typedRow)}>Editar</Button>
-                          <Button type="button" size="sm" variant="danger" onClick={() => onAskDeleteMaster(typedRow)}>Eliminar</Button>
+                          <Button type="button" size="sm" variant="secondary" onClick={() => onEditMaster(typedRow)} leftIcon={<PenSquare />}>Editar</Button>
+                          <Button type="button" size="sm" variant="danger" onClick={() => onAskDeleteMaster(typedRow)} leftIcon={<Trash2 />}>Eliminar</Button>
                         </div>
                       );
                     }

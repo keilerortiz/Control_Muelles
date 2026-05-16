@@ -49,18 +49,17 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
         {roleNavigationItems
           .filter((item) => item.roles.some((role) => roles.includes(role)))
           .map((item) => {
-            const isActive = location.pathname.startsWith(item.to);
+            const isActive = location.pathname === item.to;
             const Icon = item.Icon;
             return (
               <Link
                 key={item.to}
                 to={item.to}
                 onClick={() => onClose?.()}
-                className={`group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
-                  isActive
-                    ? "bg-brand-50 text-brand-700"
-                    : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
-                } ${collapsed ? "justify-center" : ""}`}
+                className={`group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all ${isActive
+                  ? "bg-brand-50 text-brand-700"
+                  : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
+                  } ${collapsed ? "justify-center" : ""}`}
                 title={collapsed ? item.label : ""}
               >
                 <span className="flex-shrink-0">
@@ -80,7 +79,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   );
 
   const baseClasses = `
-    flex h-full flex-col border-r border-neutral-200 bg-white transition-all duration-300
+    flex h-full flex-col border-r border-neutral-200 bg-brand-primary transition-all duration-300
     ${collapsed ? "w-16" : "w-64"}
   `;
 

@@ -18,6 +18,7 @@ class AppointmentCreate(BaseModel):
 
 
 class AppointmentUpdate(AppointmentCreate):
+    version: int
     model_config = ConfigDict(extra="forbid")
 
 
@@ -25,6 +26,7 @@ class AppointmentCheckIn(BaseModel):
     driverName: str
     driverDocument: str
     vehiclePlate: str
+    version: int
 
     model_config = ConfigDict(extra="forbid")
 
@@ -37,6 +39,7 @@ class AssignResourcesPayload(BaseModel):
     reassignDockTouched: bool = False
     reassignSeniorTouched: bool = False
     reassignJuniorTouched: bool = False
+    version: int
 
     model_config = ConfigDict(extra="forbid")
 
@@ -44,11 +47,13 @@ class AssignResourcesPayload(BaseModel):
 class StartProcessPayload(BaseModel):
     remissions: str
     precincts: str
+    version: int
 
     model_config = ConfigDict(extra="forbid")
 
 
 class ToSignPayload(BaseModel):
+    version: int
     model_config = ConfigDict(extra="forbid")
 
 
@@ -57,16 +62,19 @@ class FinalizePayload(BaseModel):
     otcNonComplianceReason: str | None = None
     otsNonComplianceReason: str | None = None
     nonComplianceComment: str | None = None
+    version: int
 
     model_config = ConfigDict(extra="forbid")
 
 
 class CheckoutPayload(BaseModel):
+    version: int
     model_config = ConfigDict(extra="forbid")
 
 
 class CancelPayload(BaseModel):
     cancellationReason: str
+    version: int
 
     model_config = ConfigDict(extra="forbid")
 

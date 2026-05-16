@@ -55,8 +55,8 @@ class AuthRepository:
             SELECT Id, UserId, TokenHash, ExpiresAt, RevokedAt
             FROM dbo.tbl_RefreshToken
             WHERE TokenHash = :token_hash
-              AND RevokedAt IS NULL
-              AND ExpiresAt > GETUTCDATE()
+              AND IsRevoked = 0
+              AND ExpiresAt > SYSUTCDATETIME()
             """
         )
         result = await self.session.execute(query, {"token_hash": token_hash})
@@ -81,7 +81,7 @@ class AuthRepository:
                 """
                 UPDATE dbo.tbl_User
                 SET PasswordHash = :password_hash,
-                    UpdatedAt = GETUTCDATE()
+                    UpdatedAt = SYSUTCDATETIME()
                 WHERE Id = :user_id
                 """
             ),

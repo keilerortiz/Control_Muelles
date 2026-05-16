@@ -28,6 +28,7 @@ class ConnectionManager:
                 await asyncio.wait_for(connection.send_text(message), timeout=5)
                 return None
             except Exception:
+                logger.warning("WebSocket send failed; connection will be removed", exc_info=True)
                 return connection
 
         results = await asyncio.gather(
@@ -37,7 +38,7 @@ class ConnectionManager:
         dead: list[WebSocket] = []
         for result in results:
             if isinstance(result, Exception):
-                logger.warning("Error sending WebSocket message: %s", result)
+                logger.warning("Error sending WebSocket message: %s", result, exc_info=True)
                 continue
             if result is not None:
                 dead.append(result)

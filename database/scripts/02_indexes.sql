@@ -14,4 +14,8 @@ CREATE INDEX IX_tbl_AssignmentLog_Appointment_AssignedAt
 ON dbo.tbl_AssignmentLog(AppointmentId, AssignedAt DESC)
 INCLUDE (DockId, OperatorId, IsActive);
 
+CREATE UNIQUE INDEX UX_tbl_NonComplianceReason_ReasonType_Name_Active
+ON dbo.tbl_NonComplianceReason(ReasonType, Name)
+WHERE IsDeleted = 0;
+
 GO

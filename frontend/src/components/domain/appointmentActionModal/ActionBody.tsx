@@ -18,26 +18,12 @@ interface ActionBodyProps {
   candidatesLoading?: boolean;
   form: AppointmentActionFormState;
   juniorOperators: Array<Record<string, unknown>>;
+  otcReasonOptions: string[];
+  otsReasonOptions: string[];
   seniorOperators: Array<Record<string, unknown>>;
   toggleOperator: (field: "seniorIds" | "juniorIds", id: number | undefined) => void;
   updateValue: (field: string, value: string | number | boolean | number[] | string[]) => void;
 }
-
-const OTC_REASON_OPTIONS = [
-  "Documentación incompleta en portería",
-  "Validación documental demorada",
-  "Congestión en portería",
-  "Novedad de seguridad en acceso",
-  "Falla de sistema en registro de ingreso",
-];
-
-const OTS_REASON_OPTIONS = [
-  "Demora por disponibilidad de muelle",
-  "Demora por disponibilidad de operarios",
-  "Novedad operativa durante el proceso",
-  "Equipos o recursos no disponibles",
-  "Retraso por re-trabajo de operación",
-];
 
 export function ActionBody({
   action,
@@ -46,6 +32,8 @@ export function ActionBody({
   candidatesLoading,
   form,
   juniorOperators,
+  otcReasonOptions,
+  otsReasonOptions,
   seniorOperators,
   toggleOperator,
   updateValue,
@@ -140,6 +128,15 @@ export function ActionBody({
   }
 
   if (action === "finalize") {
+    if (finalizeNonCompliance.isStale) {
+      return (
+        <div className="flex flex-col items-center justify-center space-y-3 py-8 text-neutral-500">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-neutral-200 border-t-primary-600"></div>
+          <p className="text-sm">Sincronizando tiempos de operación...</p>
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-4">
         <FieldGroup title="Finalización" icon={Calendar}>
@@ -152,7 +149,7 @@ export function ActionBody({
                 label="Causal OTC"
                 required
                 placeholder="Seleccionar causal OTC"
-                options={OTC_REASON_OPTIONS}
+                options={otcReasonOptions}
                 selectedValues={form.otcNonComplianceReasons || []}
                 onToggle={(reason) => toggleReason("otcNonComplianceReasons", reason)}
               />
@@ -162,7 +159,7 @@ export function ActionBody({
                 label="Causal OTS"
                 required
                 placeholder="Seleccionar causal OTS"
-                options={OTS_REASON_OPTIONS}
+                options={otsReasonOptions}
                 selectedValues={form.otsNonComplianceReasons || []}
                 onToggle={(reason) => toggleReason("otsNonComplianceReasons", reason)}
               />

@@ -9,6 +9,7 @@ from jose import JWTError, jwt
 from app.core.config import settings
 from app.core.exceptions import UnauthorizedError
 
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     if not hashed_password:
         return False

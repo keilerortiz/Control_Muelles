@@ -19,6 +19,30 @@ class OperationTypePayload(ActiveNamedPayload):
     standardTimeMinutes: int = Field(ge=1, le=1440)
 
 
+class OperatorPayload(ActiveNamedPayload):
+    operatorLevel: str = Field(min_length=6, max_length=20)
+
+    @field_validator("operatorLevel")
+    @classmethod
+    def normalize_operator_level(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if normalized not in {"JUNIOR", "SENIOR"}:
+            raise ValueError("Nivel de operario inválido")
+        return normalized
+
+
+class NonComplianceReasonPayload(ActiveNamedPayload):
+    reasonType: str = Field(min_length=3, max_length=20)
+
+    @field_validator("reasonType")
+    @classmethod
+    def normalize_reason_type(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if normalized not in {"OTC", "OTS"}:
+            raise ValueError("Tipo de causal inválido")
+        return normalized
+
+
 class StandardPayload(ActiveNamedPayload):
     standardTimeMinutes: int = Field(ge=1, le=1440)
     toleranceMinutes: int = Field(ge=0, le=1440, default=0)

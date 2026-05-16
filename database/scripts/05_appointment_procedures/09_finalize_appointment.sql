@@ -6,6 +6,7 @@ CREATE OR ALTER PROCEDURE dbo.usp_FinalizeAppointment
     @OtsNonComplianceReason NVARCHAR(500) = NULL,
     @NonComplianceComment NVARCHAR(1000) = NULL,
     @ChangedBy INT,
+    @ExpectedVersion INT = NULL,
     @CorrelationId UNIQUEIDENTIFIER = NULL
 AS
 BEGIN
@@ -26,7 +27,8 @@ BEGIN
             @currentMovedWeightKg DECIMAL(18,2),
             @currentOtcReason NVARCHAR(500),
             @currentOtsReason NVARCHAR(500),
-            @currentComment NVARCHAR(1000);
+            @currentComment NVARCHAR(1000),
+            @currentVersion INT;
 
         SELECT
             @currentStatus = a.Status,
@@ -40,7 +42,8 @@ BEGIN
             @currentMovedWeightKg = a.MovedWeightKg,
             @currentOtcReason = a.OtcNonComplianceReason,
             @currentOtsReason = a.OtsNonComplianceReason,
-            @currentComment = a.NonComplianceComment
+            @currentComment = a.NonComplianceComment,
+            @currentVersion = a.Version
         FROM dbo.tbl_Appointment a
         INNER JOIN dbo.tbl_OperationType ot ON ot.Id = a.OperationTypeId
         LEFT JOIN dbo.tbl_BusinessRule br
@@ -54,6 +57,11 @@ BEGIN
         WHERE a.Id = @AppointmentId AND a.IsDeleted = 0;
 
         IF @currentStatus IS NULL THROW 50043, 'RESOURCE_NOT_FOUND', 1;
+        
+        -- Optimistic Concurrency Check
+        IF @ExpectedVersion IS NOT NULL AND @currentVersion <> @ExpectedVersion
+            THROW 50040, 'CONCURRENCY_CONFLICT|The record has been modified by another user.', 1;
+
         IF @currentStatus <> 'PARA_FIRMAR' THROW 50044, 'INVALID_STATE_TRANSITION', 1;
         IF @FinalizedAt < @processEnd THROW 50045, 'INVALID_FINALIZED_AT', 1;
 
@@ -61,7 +69,7 @@ BEGIN
         DECLARE @otcLimit DATETIME2 = DATEADD(MINUTE, 35, @baseTime);
         DECLARE @cumpleCita BIT = CASE WHEN @arrival <= DATEADD(MINUTE, 15, @scheduled) THEN 1 ELSE 0 END;
         DECLARE @otcFail BIT = CASE WHEN @cumpleCita = 1 AND @documentDelivery > @otcLimit THEN 1 ELSE 0 END;
-        DECLARE @otsFail BIT = CASE WHEN DATEDIFF(MINUTE, @processStart, @processEnd) > @standardTime THEN 1 ELSE 0 END;
+        DECLARE @otsFail BIT = CASE WHEN @standardTime > 0 AND DATEDIFF(MINUTE, @processStart, @processEnd) > @standardTime THEN 1 ELSE 0 END;
 
         IF @otcFail = 1 AND (@OtcNonComplianceReason IS NULL OR LTRIM(RTRIM(@OtcNonComplianceReason)) = '')
             THROW 50046, 'VALIDATION_ERROR|OTC_REASON_REQUIRED', 1;
@@ -84,10 +92,11 @@ BEGIN
             OtsNonComplianceReason = @OtsNonComplianceReason,
             NonComplianceComment = @NonComplianceComment,
             Status = 'FINALIZADO',
-            UpdatedAt = GETUTCDATE(),
+            UpdatedAt = SYSUTCDATETIME(),
             UpdatedBy = @ChangedBy,
             Version = Version + 1
-        WHERE Id = @AppointmentId;
+        WHERE Id = @AppointmentId
+          AND (@ExpectedVersion IS NULL OR Version = @ExpectedVersion);
 
         DECLARE @currentFinalizedAtText NVARCHAR(MAX) = CONVERT(NVARCHAR(MAX), @currentFinalizedAt, 127);
         DECLARE @finalizedAtText NVARCHAR(MAX) = CONVERT(NVARCHAR(MAX), @FinalizedAt, 127);
@@ -112,4 +121,3 @@ BEGIN
     END CATCH
 END;
 GO
-

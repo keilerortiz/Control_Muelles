@@ -4,6 +4,7 @@ CREATE OR ALTER PROCEDURE dbo.usp_AssignAppointmentResource
     @OperatorIds NVARCHAR(MAX),
     @CandidatesVersion BIGINT,
     @ChangedBy INT,
+    @ExpectedVersion INT = NULL,
     @CorrelationId UNIQUEIDENTIFIER = NULL
 AS
 BEGIN
@@ -14,15 +15,22 @@ BEGIN
 
         DECLARE
             @currentStatus NVARCHAR(50),
-            @currentDockId INT;
+            @currentDockId INT,
+            @currentVersion INT;
 
         SELECT
             @currentStatus = Status,
-            @currentDockId = DockId
+            @currentDockId = DockId,
+            @currentVersion = Version
         FROM dbo.tbl_Appointment
         WHERE Id = @AppointmentId AND IsDeleted = 0;
 
         IF @currentStatus IS NULL THROW 50017, 'RESOURCE_NOT_FOUND', 1;
+        
+        -- Optimistic Concurrency Check
+        IF @ExpectedVersion IS NOT NULL AND @currentVersion <> @ExpectedVersion
+            THROW 50040, 'CONCURRENCY_CONFLICT|The record has been modified by another user.', 1;
+
         IF @currentStatus <> 'EN_PATIO' THROW 50018, 'INVALID_STATE_TRANSITION', 1;
 
         IF EXISTS (
@@ -84,10 +92,11 @@ BEGIN
         SET
             DockId = @DockId,
             Status = 'ENTREGA_DOCUMENTOS',
-            UpdatedAt = GETUTCDATE(),
+            UpdatedAt = SYSUTCDATETIME(),
             UpdatedBy = @ChangedBy,
             Version = Version + 1
-        WHERE Id = @AppointmentId;
+        WHERE Id = @AppointmentId
+          AND (@ExpectedVersion IS NULL OR Version = @ExpectedVersion);
 
         INSERT INTO dbo.tbl_AppointmentOperator (AppointmentId, OperatorId)
         SELECT @AppointmentId, OperatorId FROM @operator;
@@ -112,4 +121,3 @@ BEGIN
     END CATCH
 END;
 GO
-

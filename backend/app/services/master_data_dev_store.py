@@ -2,6 +2,7 @@ from copy import deepcopy
 from datetime import UTC, datetime
 
 from app.core.exceptions import AppError, NotFoundError
+from app.services.master_data_dev_seed import build_master_data_seed
 
 
 def _now_iso():
@@ -10,45 +11,26 @@ def _now_iso():
 
 class MasterDataDevStore:
     def __init__(self) -> None:
-        timestamp = _now_iso()
-        self._next_ids = {
-            "clients": 3,
-            "vehicle_types": 3,
-            "operation_types": 3,
-            "standards": 3,
-            "business_rules": 3,
-            "users": 3,
-        }
-        self.clients = {
-            1: {"Id": 1, "Name": "Cliente A", "IsActive": True, "CreatedAt": timestamp},
-            2: {"Id": 2, "Name": "Cliente B", "IsActive": True, "CreatedAt": timestamp},
-        }
-        self.vehicle_types = {
-            1: {"Id": 1, "Name": "Camion Sencillo", "IsActive": True, "CreatedAt": timestamp},
-            2: {"Id": 2, "Name": "Tractomula", "IsActive": True, "CreatedAt": timestamp},
-        }
-        self.operation_types = {
-            1: {"Id": 1, "Name": "Descargue", "StandardTimeMinutes": 120, "IsActive": True, "CreatedAt": timestamp},
-            2: {"Id": 2, "Name": "Cargue", "StandardTimeMinutes": 90, "IsActive": True, "CreatedAt": timestamp},
-        }
-        self.standards = {
-            1: {"Id": 1, "Name": "Descargue estándar", "StandardTimeMinutes": 120, "ToleranceMinutes": 15, "Description": "Operación base de descargue", "IsActive": True, "CreatedAt": timestamp, "UpdatedAt": None},
-            2: {"Id": 2, "Name": "Cargue estándar", "StandardTimeMinutes": 90, "ToleranceMinutes": 10, "Description": "Operación base de cargue", "IsActive": True, "CreatedAt": timestamp, "UpdatedAt": None},
-        }
-        self.business_rules = {
-            1: {"Id": 1, "ClientId": 1, "VehicleTypeId": 1, "OperationTypeId": 1, "StandardId": 1, "IsActive": True, "CreatedAt": timestamp, "UpdatedAt": None},
-            2: {"Id": 2, "ClientId": 2, "VehicleTypeId": 2, "OperationTypeId": 2, "StandardId": 2, "IsActive": True, "CreatedAt": timestamp, "UpdatedAt": None},
-        }
-        self.users = {
-            1: {"Id": 1, "Name": "Admin Control Muelles", "Email": "admin@muelles.local", "IsActive": True, "CreatedAt": timestamp, "UpdatedAt": None, "Roles": ["ADMIN"]},
-            2: {"Id": 2, "Name": "Supervisor Patio", "Email": "supervisor@muelles.local", "IsActive": True, "CreatedAt": timestamp, "UpdatedAt": None, "Roles": ["SUPERVISOR"]},
-        }
+        seed = build_master_data_seed(_now_iso())
+        self._next_ids = seed["next_ids"]
+        self.clients = seed["clients"]
+        self.vehicle_types = seed["vehicle_types"]
+        self.operation_types = seed["operation_types"]
+        self.docks = seed["docks"]
+        self.non_compliance_reasons = seed["non_compliance_reasons"]
+        self.operators = seed["operators"]
+        self.standards = seed["standards"]
+        self.business_rules = seed["business_rules"]
+        self.users = seed["users"]
 
     def list_catalogs(self) -> dict:
         return {
             "clients": self._sorted(self.clients),
             "vehicleTypes": self._sorted(self.vehicle_types),
             "operationTypes": self._sorted(self.operation_types),
+            "docks": self._sorted(self.docks),
+            "nonComplianceReasons": self._sorted(self.non_compliance_reasons),
+            "operators": self._sorted(self.operators),
             "standards": self._sorted(self.standards),
             "businessRules": [self._hydrate_rule(item) for item in self._sorted(self.business_rules)],
             "users": [self._hydrate_user(item) for item in self._sorted(self.users)],
@@ -80,6 +62,42 @@ class MasterDataDevStore:
             raise NotFoundError("Registro no encontrado")
         bucket[item_id]["IsActive"] = False
         return deepcopy(bucket[item_id])
+
+    def create_non_compliance_reason(self, payload: dict) -> dict:
+        self._ensure_unique_non_compliance_reason(payload["name"], payload["reasonType"])
+        item_id = self._next_ids["non_compliance_reasons"]
+        self._next_ids["non_compliance_reasons"] += 1
+        row = {
+            "Id": item_id,
+            "Name": payload["name"],
+            "ReasonType": payload["reasonType"],
+            "IsActive": payload["isActive"],
+            "CreatedAt": _now_iso(),
+            "UpdatedAt": None,
+        }
+        self.non_compliance_reasons[item_id] = row
+        return deepcopy(row)
+
+    def update_non_compliance_reason(self, item_id: int, payload: dict) -> dict:
+        row = self.non_compliance_reasons.get(item_id)
+        if not row:
+            raise NotFoundError("Registro no encontrado")
+        self._ensure_unique_non_compliance_reason(payload["name"], payload["reasonType"], exclude_id=item_id)
+        row.update({
+            "Name": payload["name"],
+            "ReasonType": payload["reasonType"],
+            "IsActive": payload["isActive"],
+            "UpdatedAt": _now_iso(),
+        })
+        return deepcopy(row)
+
+    def deactivate_non_compliance_reason(self, item_id: int) -> dict:
+        row = self.non_compliance_reasons.get(item_id)
+        if not row:
+            raise NotFoundError("Registro no encontrado")
+        row["IsActive"] = False
+        row["UpdatedAt"] = _now_iso()
+        return deepcopy(row)
 
     def create_standard(self, payload: dict) -> dict:
         item_id = self._next_ids["standards"]
@@ -117,6 +135,38 @@ class MasterDataDevStore:
             raise NotFoundError("Registro no encontrado")
         row["IsActive"] = False
         row["UpdatedAt"] = _now_iso()
+        return deepcopy(row)
+
+    def create_operator(self, payload: dict) -> dict:
+        item_id = self._next_ids["operators"]
+        self._next_ids["operators"] += 1
+        row = {
+            "Id": item_id,
+            "Name": payload["name"],
+            "OperatorLevel": payload["operatorLevel"],
+            "MaxConcurrentOperations": 1,
+            "IsActive": payload["isActive"],
+            "CreatedAt": _now_iso(),
+        }
+        self.operators[item_id] = row
+        return deepcopy(row)
+
+    def update_operator(self, item_id: int, payload: dict) -> dict:
+        row = self.operators.get(item_id)
+        if not row:
+            raise NotFoundError("Registro no encontrado")
+        row.update({
+            "Name": payload["name"],
+            "OperatorLevel": payload["operatorLevel"],
+            "IsActive": payload["isActive"],
+        })
+        return deepcopy(row)
+
+    def deactivate_operator(self, item_id: int) -> dict:
+        row = self.operators.get(item_id)
+        if not row:
+            raise NotFoundError("Registro no encontrado")
+        row["IsActive"] = False
         return deepcopy(row)
 
     def create_rule(self, payload: dict) -> dict:
@@ -227,11 +277,30 @@ class MasterDataDevStore:
         if duplicated:
             raise AppError("Ya existe un usuario con ese correo", error_code="VALIDATION_ERROR", status_code=409)
 
+    def _ensure_unique_non_compliance_reason(self, name: str, reason_type: str, exclude_id: int | None = None) -> None:
+        normalized_name = name.strip().lower()
+        normalized_reason_type = reason_type.strip().upper()
+        duplicated = next(
+            (
+                row
+                for row in self.non_compliance_reasons.values()
+                if row["Id"] != exclude_id
+                and row["Name"].strip().lower() == normalized_name
+                and str(row["ReasonType"]).strip().upper() == normalized_reason_type
+            ),
+            None,
+        )
+        if duplicated:
+            raise AppError("Ya existe una causal con ese nombre para el tipo seleccionado", error_code="VALIDATION_ERROR", status_code=409)
+
     def _bucket(self, bucket_name: str) -> dict:
         return {
             "clients": self.clients,
             "vehicle_types": self.vehicle_types,
             "operation_types": self.operation_types,
+            "docks": self.docks,
+            "non_compliance_reasons": self.non_compliance_reasons,
+            "operators": self.operators,
         }[bucket_name]
 
     def _sorted(self, bucket: dict) -> list[dict]:

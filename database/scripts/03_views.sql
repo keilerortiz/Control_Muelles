@@ -68,17 +68,17 @@ LEFT JOIN dbo.tbl_Standard s
     ON s.Id = br.StandardId
    AND s.IsActive = 1
 LEFT JOIN dbo.tbl_Dock d ON d.Id = a.DockId
-OUTER APPLY (
-    SELECT MAX(al.AssignedAt) AS LastAssignedAt
-    FROM dbo.tbl_AssignmentLog al
-    WHERE al.AppointmentId = a.Id
-) assignment_metrics
-OUTER APPLY (
-    SELECT COUNT(1) AS ActiveOperatorCount
-    FROM dbo.tbl_AppointmentOperator ao
-    WHERE ao.AppointmentId = a.Id
-      AND ao.IsActive = 1
-) operator_metrics
+LEFT JOIN (
+    SELECT AppointmentId, MAX(AssignedAt) AS LastAssignedAt
+    FROM dbo.tbl_AssignmentLog
+    GROUP BY AppointmentId
+) assignment_metrics ON assignment_metrics.AppointmentId = a.Id
+LEFT JOIN (
+    SELECT AppointmentId, COUNT(1) AS ActiveOperatorCount
+    FROM dbo.tbl_AppointmentOperator
+    WHERE IsActive = 1
+    GROUP BY AppointmentId
+) operator_metrics ON operator_metrics.AppointmentId = a.Id
 WHERE a.IsDeleted = 0;
 GO
 
